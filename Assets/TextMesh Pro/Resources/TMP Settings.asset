@@ -22,9 +22,6 @@ MonoBehaviour:
   m_missingGlyphCharacter: 0
   m_warningsDisabled: 0
   
-  //와 이것도 guid때문임 todo
-  m_defaultFontAsset: {fileID: 11400000, guid: 53fa3fa2a8a1c7c499dd20653bfc26dc, type: 2}
-  
   m_defaultFontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   
   m_defaultFontAssetPath: Fonts & Materials/
