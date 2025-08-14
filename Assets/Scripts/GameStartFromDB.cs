@@ -1,3 +1,4 @@
+// GameStartFromDB.cs (초기 동시 스폰 제거 + 안전 파싱 적용)
 using UnityEngine;
 using UnityEngine.Networking;
 using System.Collections;
@@ -10,51 +11,60 @@ class VocaDTOArray { public VocaDTO[] items; }
 
 public class GameStartFromDB : MonoBehaviour
 {
-    [SerializeField] private FallingWordMaker maker; // Inspector에 연결
+    [SerializeField] private FallingWordMaker maker;
     [SerializeField] private string url = "http://localhost:9001/api/voca/one";
+
+    [SerializeField] private int initialSpawnCount = 0;    // 시작 시 생성 개수(기본 0)
+    [SerializeField] private float initialSpawnInterval = 0.15f;
 
     private IEnumerator Start()
     {
-        for (int i = 0; i < 5; i++)
+        for (int i = 0; i < initialSpawnCount; i++)
         {
             using (var req = UnityWebRequest.Get(url))
             {
                 req.SetRequestHeader("Accept", "application/json");
                 yield return req.SendWebRequest();
+                if (req.result != UnityWebRequest.Result.Success) continue;
 
-                if (req.result != UnityWebRequest.Result.Success)
-                    continue;
+                // ▼ 안전 파싱
+                string raw = req.downloadHandler.text;
+                if (string.IsNullOrEmpty(raw)) { continue; }
+                raw = raw.TrimStart('\uFEFF', '\u200B').Trim();
 
-                // ★ 변경: 원본 수신 + 형태에 따라 파싱
-                string raw = req.downloadHandler.text?.Trim();
                 VocaDTO dto = null;
-
-                if (!string.IsNullOrEmpty(raw))
+                try
                 {
-                    if (raw.StartsWith("{")) // 객체
+                    if (raw[0] == '{')
                     {
                         dto = JsonUtility.FromJson<VocaDTO>(raw);
                     }
-                    else if (raw.StartsWith("[")) // 배열 → 첫 번째만 사용
+                    else if (raw[0] == '[')
                     {
                         string wrapped = "{\"items\":" + raw + "}";
                         var arr = JsonUtility.FromJson<VocaDTOArray>(wrapped);
-                        if (arr?.items != null && arr.items.Length > 0) dto = arr.items[0];
+                        if (arr?.items != null)
+                        {
+                            foreach (var it in arr.items)
+                                if (it != null && !string.IsNullOrEmpty(it.vocabulary)) { dto = it; break; }
+                        }
                     }
-                    else
+                    else if (raw[0] == '"' && raw[raw.Length - 1] == '"')
                     {
-                        Debug.LogError("JSON 형식이 아님(HTML/문자열).");
-                        continue;
+                        var word = raw.Substring(1, raw.Length - 2);
+                        dto = new VocaDTO { vocabulary = word, description = null };
                     }
                 }
+                catch { dto = null; }
 
                 if (dto != null && !string.IsNullOrEmpty(dto.vocabulary))
-                    maker.MakeFallingWord(dto.vocabulary); // X 좌표 랜덤
-            }
+                    maker.MakeFallingWord(dto.vocabulary);
+                // ▲ 안전 파싱 끝
 
-            // (선택) 너무 동시에 나오면 약간 지연
-            // yield return new WaitForSeconds(0.15f);
+                if (initialSpawnInterval > 0f)
+                    yield return new WaitForSeconds(initialSpawnInterval);
+            }
         }
+        yield break; // 반복 스폰은 ReWordSpawner 담당
     }
 }
-
