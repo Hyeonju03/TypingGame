@@ -1,3 +1,4 @@
+ï»¿// FallingWordMaker.cs â€” ë‹¨ì¼ TMPë¡œ ë‹¨ì–´/ë¬¸ì¥ í‘œì‹œ(ë¬¸ì¥ ^â†’ê³µë°± ì¹˜í™˜, ì¤„ë°”ê¿ˆ/ë†’ì´ ìë™)
 using System.Collections;
 using System.Collections.Generic;
 using TMPro;
@@ -6,73 +7,112 @@ using UnityEngine;
 public class FallingWordMaker : MonoBehaviour
 {
     [Header("Prefab & Canvas")]
-    public GameObject wordPrefab;          // ´Ü¾î ÇÁ¸®ÆÕ
-    public Transform spawnParent;          // Canvas(= RectTransform ÇÊ¼ö)
+    public GameObject wordPrefab;   // TMP_Text 1ê°œë§Œ í¬í•¨ëœ í”„ë¦¬íŒ¹
+    public Transform spawnParent;   // Canvas(=RectTransform)
 
     [Header("Spawn Settings")]
-    public int laneCount = 5;              // °¡·Î ·¹ÀÎ ¼ö (°ãÄ§ ¹æÁö)
-    public float edgePadding = 80f;        // ÁÂ¿ì ¿©¹é
-    public float startYOffset = 40f;       // Ä«¸Ş¶ó À­º¯¿¡¼­ À§·Î Ãß°¡
-    public float outlineWidth = 0.2f;      // Å×µÎ¸® µÎ²²(0~1)
+    public int laneCount = 5;
+    public float edgePadding = 80f;
+    public float startYOffset = 40f;
+    public float outlineWidth = 0.2f;
     public Color outlineColor = Color.red;
 
     [Header("Fall Settings")]
-    public float fallSpeed = 160f;         // ³«ÇÏ ¼Óµµ(px/sec)
-    public float bottomExtra = 80f;        // È­¸é ¾Æ·¡·Î ´õ ³»·Á°¡¼­ Á¦°Å
+    public float fallSpeed = 160f;
+    public float bottomExtra = 80f;
 
-
-    // ÃÖ±Ù »ç¿ë ·¹ÀÎ(Áßº¹ ½ºÆù ¹æÁö¿ë)
     private readonly Queue<int> recentLanes = new();
-    public void MakeFallingWord(string word)
+
+    private void Awake()
     {
+        if (spawnParent == null)
+        {
+            var canvas = FindObjectOfType<Canvas>();
+            if (canvas) spawnParent = canvas.transform;
+        }
+    }
+
+    // ë‹¨ì¼ ë¬¸ìì—´ ë²„ì „(ê¶Œì¥: ReWordSpawnerê°€ tokenë§Œ ë„˜ê¹€)
+    public void MakeFallingWord(string token) => Spawn(token);
+
+    // í˜¸í™˜ìš©: (word, sentence) ì¤‘ ë¹„ì–´ìˆì§€ ì•Šì€ ìª½ ì‚¬ìš©
+    public void MakeFallingWord(string word, string sentence)
+        => Spawn(!string.IsNullOrWhiteSpace(sentence) ? sentence : word);
+
+    private void Spawn(string token)
+    {
+        if (spawnParent == null || wordPrefab == null) return;
+
         var canvasRect = spawnParent.GetComponent<RectTransform>();
+        if (canvasRect == null) return;
+
         float halfW = canvasRect.rect.width * 0.5f;
         float halfH = canvasRect.rect.height * 0.5f;
-
-        // À­º¯ Y °íÁ¤
         float startY = halfH + startYOffset;
 
-        // ·¹ÀÎ ÁÂÇ¥ °è»ê
-        float usableW = (halfW - edgePadding) - (-halfW + edgePadding);          // °¡¿ë Æø
+        // ë ˆì¸ í­ ê³„ì‚°
+        float usableW = (halfW - edgePadding) - (-halfW + edgePadding);
         float laneWidth = usableW / Mathf.Max(1, laneCount);
         float xLeft = -halfW + edgePadding;
 
-        // »ç¿ë °¡´É ·¹ÀÎ Ç® ¸¸µé±â(ÃÖ±Ù »ç¿ë ·¹ÀÎ Á¦¿Ü)
+        // ìµœê·¼ ì‚¬ìš© ë ˆì¸ ì œì™¸
         List<int> candidates = new();
-        for (int i = 0; i < laneCount; i++)
-            if (!recentLanes.Contains(i)) candidates.Add(i);
+        for (int i = 0; i < laneCount; i++) if (!recentLanes.Contains(i)) candidates.Add(i);
         if (candidates.Count == 0) { recentLanes.Clear(); for (int i = 0; i < laneCount; i++) candidates.Add(i); }
 
-        // ·£´ı ·¹ÀÎ ¼±ÅÃ
         int laneIdx = candidates[Random.Range(0, candidates.Count)];
         float xCenter = xLeft + (laneIdx + 0.5f) * laneWidth;
 
-        // ÇÁ¸®ÆÕ »ı¼º/¹èÄ¡
+        // í”„ë¦¬íŒ¹ ìƒì„±/ë°°ì¹˜
         var obj = Instantiate(wordPrefab, spawnParent);
-        var rect = obj.GetComponent<RectTransform>();
-        rect.anchoredPosition = new Vector2(xCenter, startY);
+        var root = obj.GetComponent<RectTransform>();
+        root.anchoredPosition = new Vector2(xCenter, startY);
 
-        // ÅØ½ºÆ® Ç¥½Ã + Å×µÎ¸® Àû¿ë
+        // TMP í•˜ë‚˜ë§Œ ì‚¬ìš©
         var label = obj.GetComponentInChildren<TMP_Text>();
-        if (label)
+        if (label != null)
         {
-            label.text = word;
+            // ^ â†’ ê³µë°± ì¹˜í™˜ í›„ ì„¸íŒ…
+            string text = (token ?? string.Empty).Replace("^", " ").Trim();
+            label.text = text;
 
-            // TMP ¸ÓÆ¼¸®¾ó Outline ¼³Á¤
-            var mat = label.fontMaterial; // ÀÎ½ºÅÏ½ºÈ­µÈ ¸ÓÆ¼¸®¾ó
-            TMPro.ShaderUtilities.GetShaderPropertyIDs(); // ¾ÈÀü È£Ãâ
-            mat.EnableKeyword("OUTLINE_ON");
-            mat.SetFloat(TMPro.ShaderUtilities.ID_OutlineWidth, outlineWidth);
-            mat.SetColor(TMPro.ShaderUtilities.ID_OutlineColor, outlineColor);
-            label.fontMaterial = mat; // Àû¿ë
+            // ì™¸ê³½ì„ 
+            ApplyOutline(label);
+
+            // ì¤„ë°”ê¿ˆ/ì˜¤í† ì‚¬ì´ì¦ˆ ê°•ì œ
+            label.enableWordWrapping = true;
+            label.enableAutoSizing = true;
+            label.fontSizeMin = 12;
+            label.fontSizeMax = 24;
+            label.alignment = TextAlignmentOptions.TopLeft;
+
+            // ë ˆì¸ í­ì— ë§ì¶° ê°€ë¡œí­ ê³ ì •
+            var lRect = label.GetComponent<RectTransform>();
+            lRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, Mathf.Max(120f, laneWidth - 20f));
+
+            // ë‚´ìš© ê¸°ì¤€ìœ¼ë¡œ ì„¸ë¡œ ë†’ì´ í™•ì¥(ë£¨íŠ¸ë„ í•¨ê»˜ í™•ì¥í•´ ì˜ë¦¼ ë°©ì§€)
+            label.ForceMeshUpdate();
+            float h = Mathf.Ceil(label.preferredHeight) + 8f; // íŒ¨ë”©
+            lRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, h);
+            root.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, h);
         }
 
-        // ÃÖ±Ù »ç¿ë ·¹ÀÎ ±â·Ï(Å©±â Á¦ÇÑ)
+        // ìµœê·¼ ë ˆì¸ ê¸°ë¡
         recentLanes.Enqueue(laneIdx);
         while (recentLanes.Count > laneCount - 1) recentLanes.Dequeue();
 
-        // ³«ÇÏ ½ÃÀÛ
-        StartCoroutine(FallDown(rect, obj, -halfH - bottomExtra));
+        // ë‚™í•˜
+        StartCoroutine(FallDown(root, obj, -halfH - bottomExtra));
+    }
+
+    private void ApplyOutline(TMP_Text label)
+    {
+        var mat = label.fontMaterial;
+        TMPro.ShaderUtilities.GetShaderPropertyIDs();
+        mat.EnableKeyword("OUTLINE_ON");
+        mat.SetFloat(TMPro.ShaderUtilities.ID_OutlineWidth, outlineWidth);
+        mat.SetColor(TMPro.ShaderUtilities.ID_OutlineColor, outlineColor);
+        label.fontMaterial = mat;
     }
 
     private IEnumerator FallDown(RectTransform rect, GameObject obj, float killY)
