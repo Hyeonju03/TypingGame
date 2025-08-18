@@ -1534,7 +1534,7 @@ MonoBehaviour:
   maker: {fileID: 957469879}
   spawnInterval: 1.2
   preventImmediateDup: 1
-  url: http://localhost:9001/api/voca/one
+  url: http://localhost:9001/api/learn/both
   retryDelay: 0.8
 --- !u!4 &1196062051
 Transform:
@@ -1581,7 +1581,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maker: {fileID: 957469879}
-  url: http://localhost:9001/api/voca/one
+  bothUrl: http://localhost:9001/api/learn/both
   initialSpawnCount: 0
   initialSpawnInterval: 0.15
 --- !u!4 &1240899493
