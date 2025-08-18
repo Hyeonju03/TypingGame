@@ -1,5 +1,4 @@
-﻿// ReWordSpawner.cs — /api/learn/both 주기 스폰 + 강제 로깅
-// (✅ 변경점에 // CHANGED, // NEW 주석 표시)
+﻿// ReWordSpawner.cs — /api/learn/both 주기 스폰 + stage 분기 (1=단어, 2=문장, 3=둘중 하나만 랜덤)
 using System.Collections;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -15,10 +14,14 @@ public class ReWordSpawner : MonoBehaviour
 
     [Header("API")]
     [SerializeField] private string url = "http://localhost:9001/api/learn/both";
+
+    [Header("Stage")]
+    [SerializeField, Range(1, 3)] private int stage = 3; // 1=단어, 2=문장, 3=둘 중 하나만 랜덤
+
     [SerializeField] private float retryDelay = 0.6f;
 
     private Coroutine loop;
-    private string lastWord; // CHANGED: 토큰(단어/문장)도 여기 재활용
+    private string lastWord; // 직전 스폰 텍스트(중복 방지)
 
     private void Awake()
     {
@@ -31,7 +34,6 @@ public class ReWordSpawner : MonoBehaviour
 
     private void Start()
     {
-        Debug.Log("[ReWordSpawner] Start() 호출 → 스폰 루프 시작");
         loop = StartCoroutine(SpawnLoop());
     }
 
@@ -42,71 +44,49 @@ public class ReWordSpawner : MonoBehaviour
         {
             yield return wait;
 
-            Debug.Log("[ReWordSpawner] 루프 틱: /api/learn/both 요청 시작");
+            string requestUrl = $"{url}?stage={stage}";
             BothDTO dto = null;
-            yield return StartCoroutine(GetBoth(r => dto = r));
+            yield return StartCoroutine(GetBoth(requestUrl, r => dto = r));
 
-            if (dto == null)
-            {
-                Debug.LogWarning("[ReWordSpawner] dto==null (네트워크/파싱 실패 또는 빈 응답)");
-                continue;
-            }
+            if (dto == null) continue;
 
-            Debug.Log($"[ReWordSpawner] 응답 OK: word='{dto.vocabulary}', munjang='{dto.munjang}'");
+            // 정제
+            string word = (dto.vocabulary ?? "").Replace("^", " ").Trim();
+            string sent = ((dto.munjangDisplay ?? dto.munjang) ?? "").Replace("^", " ").Trim();
 
-            // ===== CHANGED: 단어 / 문장 중 하나를 랜덤 선택 =====
-            string word = (dto.vocabulary ?? "").Trim();
-            string sent = (dto.munjang ?? "").Trim();
+            // stage별로 "한 개"만 선택
+            string token =
+                (stage == 1) ? word :
+                (stage == 2) ? sent :
+                PickOne(word, sent); // stage == 3
 
-            bool useSentence = !string.IsNullOrWhiteSpace(sent) && Random.value < 0.5f;
-            string token = useSentence ? sent : word;
             if (string.IsNullOrWhiteSpace(token)) continue;
-            // ===== CHANGED 끝 =====
+            if (preventImmediateDup && token == lastWord) continue;
 
-            // ===== CHANGED: 중복 검사도 token 기준 =====
-            if (preventImmediateDup && token == lastWord)
-            {
-                Debug.Log("[ReWordSpawner] 직전 텍스트와 동일 → 재시도");
-                BothDTO retry = null;
-                yield return StartCoroutine(GetBoth(r => retry = r));
-                if (retry != null)
-                {
-                    word = (retry.vocabulary ?? "").Trim();
-                    sent = (retry.munjang ?? "").Trim();
-                    useSentence = !string.IsNullOrWhiteSpace(sent) && Random.value < 0.5f;
-                    token = useSentence ? sent : word;
-                    if (string.IsNullOrWhiteSpace(token)) continue;
-                }
-            }
             lastWord = token;
-            // ===== CHANGED 끝 =====
-
-            if (maker == null)
-            {
-                Debug.LogError("[ReWordSpawner] maker가 null이라 스폰 불가");
-                continue;
-            }
-
-            // ===== CHANGED: 한 문자열만 넘김 =====
-            Debug.Log($"[ReWordSpawner] MakeFallingWord 호출: {(useSentence ? "문장" : "단어")}='{token}'");
-            maker.MakeFallingWord(token);
-            // ===== CHANGED 끝 =====
+            maker.MakeFallingWord(token); // ✅ 단 한 번만 스폰
         }
     }
 
-
-    private IEnumerator GetBoth(System.Action<BothDTO> done)
+    private string PickOne(string w, string s)
     {
-        using (var req = UnityWebRequest.Get(url))
+        bool hasW = !string.IsNullOrWhiteSpace(w);
+        bool hasS = !string.IsNullOrWhiteSpace(s);
+        if (!hasW && !hasS) return null;
+        if (!hasW) return s;
+        if (!hasS) return w;
+        return (Random.value < 0.5f) ? w : s; // 50:50
+    }
+
+    private IEnumerator GetBoth(string requestUrl, System.Action<BothDTO> done)
+    {
+        using (var req = UnityWebRequest.Get(requestUrl))
         {
             req.SetRequestHeader("Accept", "application/json");
             yield return req.SendWebRequest();
 
-            Debug.Log($"[ReWordSpawner] HTTP {req.responseCode} result={req.result}");
-
             if (req.result != UnityWebRequest.Result.Success)
             {
-                Debug.LogError("[ReWordSpawner] HTTP 실패: " + req.error);
                 yield return new WaitForSeconds(retryDelay);
                 done(null); yield break;
             }
@@ -114,30 +94,25 @@ public class ReWordSpawner : MonoBehaviour
             string raw = (req.downloadHandler.text ?? "")
                          .TrimStart('\uFEFF', '\u200B', '\u0000').Trim();
 
-            if (string.IsNullOrEmpty(raw))
-            {
-                Debug.LogWarning("[ReWordSpawner] 빈 본문");
-                done(null); yield break;
-            }
-
-            int i = 0; while (i < raw.Length && char.IsWhiteSpace(raw[i])) i++;
-            if (i >= raw.Length || raw[i] != '{')
-            {
-                Debug.LogError("[ReWordSpawner] JSON 객체 아님: " + raw);
-                done(null); yield break;
-            }
+            if (string.IsNullOrEmpty(raw)) { done(null); yield break; }
+            if (raw[0] != '{') { done(null); yield break; }
 
             BothDTO dto = null;
             try { dto = JsonUtility.FromJson<BothDTO>(raw); }
-            catch (System.Exception ex)
-            {
-                Debug.LogError("[ReWordSpawner] JSON 파싱 실패: " + ex.Message);
-            }
+            catch { dto = null; }
 
             done(dto);
         }
     }
 
-    public void Pause() { if (loop != null) { StopCoroutine(loop); loop = null; Debug.Log("[ReWordSpawner] Pause"); } }
-    public void Resume() { if (loop == null) { loop = StartCoroutine(SpawnLoop()); Debug.Log("[ReWordSpawner] Resume"); } }
+    public void Pause()
+    {
+        if (loop != null) { StopCoroutine(loop); loop = null; }
+    }
+
+    public void Resume()
+    {
+        if (loop == null) { loop = StartCoroutine(SpawnLoop()); }
+    }
 }
+
