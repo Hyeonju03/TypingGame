@@ -1,3 +1,4 @@
+
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -40,6 +41,7 @@ public class ReWordSpawner : MonoBehaviour
     private Coroutine loop;
     private string lastWord;
 
+
     private void Awake()
     {
         if (maker == null)
@@ -51,7 +53,6 @@ public class ReWordSpawner : MonoBehaviour
 
     private void Start()
     {
-        Debug.Log("[ReWordSpawner] Start() 호출 → 스폰 루프 시작");
         loop = StartCoroutine(SpawnLoop());
     }
 
@@ -119,7 +120,6 @@ public class ReWordSpawner : MonoBehaviour
 
             if (req.result != UnityWebRequest.Result.Success)
             {
-                Debug.LogError("[ReWordSpawner] HTTP 실패: " + req.error);
                 yield return new WaitForSeconds(retryDelay);
                 done(null); yield break;
             }
