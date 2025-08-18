@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 using System.Linq;
-using UnityEngine.SceneManagement; // 씬 전환을 위해 추가
+using UnityEngine.SceneManagement;
 
 public class InputManager : MonoBehaviour
 {
@@ -18,7 +18,6 @@ public class InputManager : MonoBehaviour
     [Header("Scene Management")]
     public string nextSceneName;
 
-    // 단어와 해당 게임 오브젝트를 매핑하여 관리
     public Dictionary<string, List<GameObject>> wordObjectMap = new Dictionary<string, List<GameObject>>();
 
     void Start()
@@ -31,7 +30,6 @@ public class InputManager : MonoBehaviour
         StartCoroutine(Fade(transitionCanvasGroup, 1f, 0f, 0.5f));
     }
 
-    // FallingWordMaker가 생성한 단어와 오브젝트를 전달받는 메서드
     public void AddWordAndObject(string newWord, GameObject obj)
     {
         if (!wordObjectMap.ContainsKey(newWord))
@@ -45,10 +43,11 @@ public class InputManager : MonoBehaviour
     public void OnSubmitInput(string input)
     {
         string submittedText = input.Trim();
+        string processedInput = submittedText.Replace(' ', '^');
 
-        if (wordObjectMap.ContainsKey(submittedText))
+        if (wordObjectMap.ContainsKey(processedInput))
         {
-            var objects = wordObjectMap[submittedText];
+            var objects = wordObjectMap[processedInput];
             if (objects.Count > 0)
             {
                 GameObject targetObj = objects.OrderBy(o => o.transform.position.y).FirstOrDefault();
@@ -62,7 +61,7 @@ public class InputManager : MonoBehaviour
 
                     if (objects.Count == 0)
                     {
-                        wordObjectMap.Remove(submittedText);
+                        wordObjectMap.Remove(processedInput);
                     }
 
                     wordsRemoved++;
@@ -71,7 +70,7 @@ public class InputManager : MonoBehaviour
                     if (wordsRemoved >= wordsToNextScene)
                     {
                         StartCoroutine(FadeAndLoadScene(transitionCanvasGroup, 0f, 1f, 0.5f, nextSceneName));
-                        return; // 씬 로드 코루틴이 시작되면 더 이상 진행하지 않음
+                        return;
                     }
                 }
             }
@@ -81,20 +80,30 @@ public class InputManager : MonoBehaviour
         inputField.ActivateInputField();
     }
 
-    public void RemoveWordAndObject(string word, GameObject obj)
+    // ★★★ 이 메서드의 시그니처와 내부 로직을 수정했습니다. ★★★
+    public void RemoveWordAndObject(GameObject obj)
     {
-        if (wordObjectMap.ContainsKey(word))
-        {
-            var objects = wordObjectMap[word];
-            if (objects.Contains(obj))
-            {
-                objects.Remove(obj);
-                Debug.Log($"[InputManager] 딕셔너리에서 '{word}' 오브젝트 제거됨.");
+        if (obj == null) return;
 
-                if (objects.Count == 0)
-                {
-                    wordObjectMap.Remove(word);
-                }
+        string wordToRemove = null;
+        foreach (var entry in wordObjectMap)
+        {
+            if (entry.Value.Contains(obj))
+            {
+                wordToRemove = entry.Key;
+                break;
+            }
+        }
+
+        if (wordToRemove != null)
+        {
+            var objects = wordObjectMap[wordToRemove];
+            objects.Remove(obj);
+            Debug.Log($"[InputManager] 딕셔너리에서 '{wordToRemove}' 오브젝트 제거됨.");
+
+            if (objects.Count == 0)
+            {
+                wordObjectMap.Remove(wordToRemove);
             }
         }
     }
@@ -114,10 +123,7 @@ public class InputManager : MonoBehaviour
 
     private IEnumerator FadeAndLoadScene(CanvasGroup canvasGroup, float startAlpha, float endAlpha, float duration, string sceneName)
     {
-        // 페이드 아웃 효과 시작
         yield return StartCoroutine(Fade(canvasGroup, startAlpha, endAlpha, duration));
-
-        // 씬 로드
         SceneManager.LoadScene(sceneName);
     }
 }
