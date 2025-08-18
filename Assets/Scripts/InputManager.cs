@@ -1,14 +1,24 @@
-using System.Collections;
+ï»¿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
+using System.Linq;
+using UnityEngine.SceneManagement;
 
 public class InputManager : MonoBehaviour
 {
+    [Header("Refs")]
     public TMP_InputField inputField;
+    public CanvasGroup transitionCanvasGroup;
 
-    // ´Ù¸¥ ½ºÅ©¸³Æ®¿¡¼­ Á¢±ÙÇÒ ¼ö ÀÖµµ·Ï publicÀ¸·Î ¼±¾ğ
-    public List<string> wordList = new List<string>();
+    [Header("Game State")]
+    public int wordsToNextScene = 15;
+    private int wordsRemoved = 0;
+
+    [Header("Scene Management")]
+    public string nextSceneName;
+
+    public Dictionary<string, List<GameObject>> wordObjectMap = new Dictionary<string, List<GameObject>>();
 
     void Start()
     {
@@ -16,45 +26,104 @@ public class InputManager : MonoBehaviour
         {
             inputField.onEndEdit.AddListener(OnSubmitInput);
         }
+
+        StartCoroutine(Fade(transitionCanvasGroup, 1f, 0f, 0.5f));
     }
 
-    // ¿ÜºÎ¿¡¼­ ´Ü¾î¸¦ Ãß°¡ÇÒ ¶§ È£ÃâÇÒ ¸Ş¼­µå
-    public void AddWord(string newWord)
+    public void AddWordAndObject(string newWord, GameObject obj)
     {
-        wordList.Add(newWord);
-        Debug.Log("»õ·Î¿î ´Ü¾î°¡ Ãß°¡µÇ¾ú½À´Ï´Ù: " + newWord);
+        if (!wordObjectMap.ContainsKey(newWord))
+        {
+            wordObjectMap[newWord] = new List<GameObject>();
+        }
+        wordObjectMap[newWord].Add(obj);
+        Debug.Log($"[InputManager] ìƒˆë¡œìš´ ë‹¨ì–´ê°€ ì¶”ê°€ë˜ì—ˆìŠµë‹ˆë‹¤: '{newWord}'. í˜„ì¬ '{newWord}' ê°œìˆ˜: {wordObjectMap[newWord].Count}");
     }
 
     public void OnSubmitInput(string input)
     {
-
         string submittedText = input.Trim();
-        bool found = false;
+        string processedInput = submittedText.Replace(' ', '^');
 
-        for (int i = 0; i < wordList.Count; i++)
+        if (wordObjectMap.ContainsKey(processedInput))
         {
-            if (wordList[i] == submittedText)
+            var objects = wordObjectMap[processedInput];
+            if (objects.Count > 0)
             {
-                Debug.Log("Á¤´äÀÔ´Ï´Ù! '" + submittedText + "'¸¦ ¼º°øÀûÀ¸·Î Á¦°ÅÇß½À´Ï´Ù.");
+                GameObject targetObj = objects.OrderBy(o => o.transform.position.y).FirstOrDefault();
 
-                // ´Ü¾î ¸®½ºÆ®¿¡¼­ Á¦°Å
-                wordList.RemoveAt(i);
+                if (targetObj != null)
+                {
+                    Debug.Log("ì •ë‹µì…ë‹ˆë‹¤! '" + submittedText + "'ë¥¼ ì„±ê³µì ìœ¼ë¡œ ì œê±°í–ˆìŠµë‹ˆë‹¤.");
 
-                // (ÀÌ ºÎºĞ¿¡ ½ÇÁ¦ °ÔÀÓ ¿ÀºêÁ§Æ®¸¦ Ã£¾Æ Á¦°ÅÇÏ´Â ·ÎÁ÷ Ãß°¡)
+                    objects.Remove(targetObj);
+                    Destroy(targetObj);
 
-                found = true;
-                break;
+                    if (objects.Count == 0)
+                    {
+                        wordObjectMap.Remove(processedInput);
+                    }
+
+                    wordsRemoved++;
+                    Debug.Log($"[InputManager] ì œê±°ëœ ë‹¨ì–´ ìˆ˜: {wordsRemoved}");
+
+                    if (wordsRemoved >= wordsToNextScene)
+                    {
+                        StartCoroutine(FadeAndLoadScene(transitionCanvasGroup, 0f, 1f, 0.5f, nextSceneName));
+                        return;
+                    }
+                }
             }
         }
 
         inputField.text = "";
         inputField.ActivateInputField();
-        return;
     }
 
-    // Update is called once per frame
-    void Update()
+    // â˜…â˜…â˜… ì´ ë©”ì„œë“œì˜ ì‹œê·¸ë‹ˆì²˜ì™€ ë‚´ë¶€ ë¡œì§ì„ ìˆ˜ì •í–ˆìŠµë‹ˆë‹¤. â˜…â˜…â˜…
+    public void RemoveWordAndObject(GameObject obj)
     {
-        
+        if (obj == null) return;
+
+        string wordToRemove = null;
+        foreach (var entry in wordObjectMap)
+        {
+            if (entry.Value.Contains(obj))
+            {
+                wordToRemove = entry.Key;
+                break;
+            }
+        }
+
+        if (wordToRemove != null)
+        {
+            var objects = wordObjectMap[wordToRemove];
+            objects.Remove(obj);
+            Debug.Log($"[InputManager] ë”•ì…”ë„ˆë¦¬ì—ì„œ '{wordToRemove}' ì˜¤ë¸Œì íŠ¸ ì œê±°ë¨.");
+
+            if (objects.Count == 0)
+            {
+                wordObjectMap.Remove(wordToRemove);
+            }
+        }
+    }
+
+    private IEnumerator Fade(CanvasGroup canvasGroup, float startAlpha, float endAlpha, float duration)
+    {
+        float time = 0;
+        while (time < duration)
+        {
+            time += Time.deltaTime;
+            float alpha = Mathf.Lerp(startAlpha, endAlpha, time / duration);
+            canvasGroup.alpha = alpha;
+            yield return null;
+        }
+        canvasGroup.alpha = endAlpha;
+    }
+
+    private IEnumerator FadeAndLoadScene(CanvasGroup canvasGroup, float startAlpha, float endAlpha, float duration, string sceneName)
+    {
+        yield return StartCoroutine(Fade(canvasGroup, startAlpha, endAlpha, duration));
+        SceneManager.LoadScene(sceneName);
     }
 }
