@@ -1,14 +1,25 @@
-using System.Collections;
+ï»¿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
+using System.Linq;
+using UnityEngine.SceneManagement; // ì”¬ ì „í™˜ì„ ìœ„í•´ ì¶”ê°€
 
 public class InputManager : MonoBehaviour
 {
+    [Header("Refs")]
     public TMP_InputField inputField;
+    public CanvasGroup transitionCanvasGroup;
 
-    // ´Ù¸¥ ½ºÅ©¸³Æ®¿¡¼­ Á¢±ÙÇÒ ¼ö ÀÖµµ·Ï publicÀ¸·Î ¼±¾ğ
-    public List<string> wordList = new List<string>();
+    [Header("Game State")]
+    public int wordsToNextScene = 15;
+    private int wordsRemoved = 0;
+
+    [Header("Scene Management")]
+    public string nextSceneName;
+
+    // ë‹¨ì–´ì™€ í•´ë‹¹ ê²Œì„ ì˜¤ë¸Œì íŠ¸ë¥¼ ë§¤í•‘í•˜ì—¬ ê´€ë¦¬
+    public Dictionary<string, List<GameObject>> wordObjectMap = new Dictionary<string, List<GameObject>>();
 
     void Start()
     {
@@ -16,45 +27,97 @@ public class InputManager : MonoBehaviour
         {
             inputField.onEndEdit.AddListener(OnSubmitInput);
         }
+
+        StartCoroutine(Fade(transitionCanvasGroup, 1f, 0f, 0.5f));
     }
 
-    // ¿ÜºÎ¿¡¼­ ´Ü¾î¸¦ Ãß°¡ÇÒ ¶§ È£ÃâÇÒ ¸Ş¼­µå
-    public void AddWord(string newWord)
+    // FallingWordMakerê°€ ìƒì„±í•œ ë‹¨ì–´ì™€ ì˜¤ë¸Œì íŠ¸ë¥¼ ì „ë‹¬ë°›ëŠ” ë©”ì„œë“œ
+    public void AddWordAndObject(string newWord, GameObject obj)
     {
-        wordList.Add(newWord);
-        Debug.Log("»õ·Î¿î ´Ü¾î°¡ Ãß°¡µÇ¾ú½À´Ï´Ù: " + newWord);
+        if (!wordObjectMap.ContainsKey(newWord))
+        {
+            wordObjectMap[newWord] = new List<GameObject>();
+        }
+        wordObjectMap[newWord].Add(obj);
+        Debug.Log($"[InputManager] ìƒˆë¡œìš´ ë‹¨ì–´ê°€ ì¶”ê°€ë˜ì—ˆìŠµë‹ˆë‹¤: '{newWord}'. í˜„ì¬ '{newWord}' ê°œìˆ˜: {wordObjectMap[newWord].Count}");
     }
 
     public void OnSubmitInput(string input)
     {
-
         string submittedText = input.Trim();
-        bool found = false;
 
-        for (int i = 0; i < wordList.Count; i++)
+        if (wordObjectMap.ContainsKey(submittedText))
         {
-            if (wordList[i] == submittedText)
+            var objects = wordObjectMap[submittedText];
+            if (objects.Count > 0)
             {
-                Debug.Log("Á¤´äÀÔ´Ï´Ù! '" + submittedText + "'¸¦ ¼º°øÀûÀ¸·Î Á¦°ÅÇß½À´Ï´Ù.");
+                GameObject targetObj = objects.OrderBy(o => o.transform.position.y).FirstOrDefault();
 
-                // ´Ü¾î ¸®½ºÆ®¿¡¼­ Á¦°Å
-                wordList.RemoveAt(i);
+                if (targetObj != null)
+                {
+                    Debug.Log("ì •ë‹µì…ë‹ˆë‹¤! '" + submittedText + "'ë¥¼ ì„±ê³µì ìœ¼ë¡œ ì œê±°í–ˆìŠµë‹ˆë‹¤.");
 
-                // (ÀÌ ºÎºĞ¿¡ ½ÇÁ¦ °ÔÀÓ ¿ÀºêÁ§Æ®¸¦ Ã£¾Æ Á¦°ÅÇÏ´Â ·ÎÁ÷ Ãß°¡)
+                    objects.Remove(targetObj);
+                    Destroy(targetObj);
 
-                found = true;
-                break;
+                    if (objects.Count == 0)
+                    {
+                        wordObjectMap.Remove(submittedText);
+                    }
+
+                    wordsRemoved++;
+                    Debug.Log($"[InputManager] ì œê±°ëœ ë‹¨ì–´ ìˆ˜: {wordsRemoved}");
+
+                    if (wordsRemoved >= wordsToNextScene)
+                    {
+                        StartCoroutine(FadeAndLoadScene(transitionCanvasGroup, 0f, 1f, 0.5f, nextSceneName));
+                        return; // ì”¬ ë¡œë“œ ì½”ë£¨í‹´ì´ ì‹œì‘ë˜ë©´ ë” ì´ìƒ ì§„í–‰í•˜ì§€ ì•ŠìŒ
+                    }
+                }
             }
         }
 
         inputField.text = "";
         inputField.ActivateInputField();
-        return;
     }
 
-    // Update is called once per frame
-    void Update()
+    public void RemoveWordAndObject(string word, GameObject obj)
     {
-        
+        if (wordObjectMap.ContainsKey(word))
+        {
+            var objects = wordObjectMap[word];
+            if (objects.Contains(obj))
+            {
+                objects.Remove(obj);
+                Debug.Log($"[InputManager] ë”•ì…”ë„ˆë¦¬ì—ì„œ '{word}' ì˜¤ë¸Œì íŠ¸ ì œê±°ë¨.");
+
+                if (objects.Count == 0)
+                {
+                    wordObjectMap.Remove(word);
+                }
+            }
+        }
+    }
+
+    private IEnumerator Fade(CanvasGroup canvasGroup, float startAlpha, float endAlpha, float duration)
+    {
+        float time = 0;
+        while (time < duration)
+        {
+            time += Time.deltaTime;
+            float alpha = Mathf.Lerp(startAlpha, endAlpha, time / duration);
+            canvasGroup.alpha = alpha;
+            yield return null;
+        }
+        canvasGroup.alpha = endAlpha;
+    }
+
+    private IEnumerator FadeAndLoadScene(CanvasGroup canvasGroup, float startAlpha, float endAlpha, float duration, string sceneName)
+    {
+        // í˜ì´ë“œ ì•„ì›ƒ íš¨ê³¼ ì‹œì‘
+        yield return StartCoroutine(Fade(canvasGroup, startAlpha, endAlpha, duration));
+
+        // ì”¬ ë¡œë“œ
+        SceneManager.LoadScene(sceneName);
     }
 }

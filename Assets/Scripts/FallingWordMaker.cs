@@ -1,12 +1,13 @@
-﻿// FallingWordMaker.cs — 단일 TMP로 단어/문장 표시(문장 ^→공백 치환, 줄바꿈/높이 자동)
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using System;
 
 public class FallingWordMaker : MonoBehaviour
 {
-    [Header("Prefab & Canvas")]
+    [Header("Refs")]
+    public InputManager inputManager;
     public GameObject wordPrefab;   // TMP_Text 1개만 포함된 프리팹
     public Transform spawnParent;   // Canvas(=RectTransform)
 
@@ -60,7 +61,7 @@ public class FallingWordMaker : MonoBehaviour
         for (int i = 0; i < laneCount; i++) if (!recentLanes.Contains(i)) candidates.Add(i);
         if (candidates.Count == 0) { recentLanes.Clear(); for (int i = 0; i < laneCount; i++) candidates.Add(i); }
 
-        int laneIdx = candidates[Random.Range(0, candidates.Count)];
+        int laneIdx = candidates[UnityEngine.Random.Range(0, candidates.Count)];
         float xCenter = xLeft + (laneIdx + 0.5f) * laneWidth;
 
         // 프리팹 생성/배치
@@ -95,6 +96,12 @@ public class FallingWordMaker : MonoBehaviour
             float h = Mathf.Ceil(label.preferredHeight) + 8f; // 패딩
             lRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, h);
             root.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, h);
+
+            // InputManager에 단어와 오브젝트 정보 전달
+            if (inputManager != null)
+            {
+                inputManager.AddWordAndObject(text, obj);
+            }
         }
 
         // 최근 레인 기록
@@ -122,6 +129,17 @@ public class FallingWordMaker : MonoBehaviour
             rect.anchoredPosition -= new Vector2(0, fallSpeed * Time.deltaTime);
             yield return null;
         }
+
+        if (inputManager != null)
+        {
+            var label = obj.GetComponentInChildren<TMP_Text>();
+            if (label != null)
+            {
+                string text = (label.text ?? "").Trim();
+                inputManager.RemoveWordAndObject(text, obj);
+            }
+        }
+
         Destroy(obj);
     }
 }

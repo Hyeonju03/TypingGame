@@ -1,8 +1,24 @@
-﻿// ReWordSpawner.cs — /api/learn/both 주기 스폰 + 강제 로깅
-// (✅ 변경점에 // CHANGED, // NEW 주석 표시)
-using System.Collections;
+﻿using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Networking;
+using System;
+using System.Text.RegularExpressions;
+
+[System.Serializable]
+public class OneDTO
+{
+    public string type;
+    public string text;
+    public string mean;
+}
+
+public enum SpawnMode
+{
+    Mixed,
+    WordOnly,
+    SentenceOnly
+}
 
 public class ReWordSpawner : MonoBehaviour
 {
@@ -13,12 +29,16 @@ public class ReWordSpawner : MonoBehaviour
     [SerializeField] private float spawnInterval = 1.2f;
     [SerializeField] private bool preventImmediateDup = true;
 
+    [Header("Spawn Mode")]
+    [SerializeField] private SpawnMode currentMode = SpawnMode.Mixed;
+
     [Header("API")]
-    [SerializeField] private string url = "http://localhost:9001/api/learn/both";
+    [SerializeField] private string bothUrl = "http://localhost:9001/api/learn/both";
+    [SerializeField] private string oneUrl = "http://localhost:9001/api/learn/one?kind=";
     [SerializeField] private float retryDelay = 0.6f;
 
     private Coroutine loop;
-    private string lastWord; // CHANGED: 토큰(단어/문장)도 여기 재활용
+    private string lastWord;
 
     private void Awake()
     {
@@ -42,44 +62,42 @@ public class ReWordSpawner : MonoBehaviour
         {
             yield return wait;
 
-            Debug.Log("[ReWordSpawner] 루프 틱: /api/learn/both 요청 시작");
-            BothDTO dto = null;
-            yield return StartCoroutine(GetBoth(r => dto = r));
+            Debug.Log($"[ReWordSpawner] 루프 틱: 스폰 모드 {currentMode} 시작");
+            string token = null;
 
-            if (dto == null)
+            switch (currentMode)
             {
-                Debug.LogWarning("[ReWordSpawner] dto==null (네트워크/파싱 실패 또는 빈 응답)");
+                case SpawnMode.WordOnly:
+                    yield return StartCoroutine(GetOne("word", r => token = r));
+                    break;
+                case SpawnMode.SentenceOnly:
+                    yield return StartCoroutine(GetOne("sentence", r => token = r));
+                    break;
+                case SpawnMode.Mixed:
+                    BothDTO dto = null;
+                    yield return StartCoroutine(GetBoth(r => dto = r));
+                    if (dto != null)
+                    {
+                        string word = (dto.vocabulary ?? "").Trim();
+                        string sent = (dto.munjang ?? "").Trim();
+                        bool useSentence = !string.IsNullOrWhiteSpace(sent) && UnityEngine.Random.value < 0.5f;
+                        token = useSentence ? sent : word;
+                    }
+                    break;
+            }
+
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                Debug.LogWarning("[ReWordSpawner] 토큰을 가져오지 못했습니다. (네트워크/파싱 실패 또는 빈 응답)");
                 continue;
             }
 
-            Debug.Log($"[ReWordSpawner] 응답 OK: word='{dto.vocabulary}', munjang='{dto.munjang}'");
-
-            // ===== CHANGED: 단어 / 문장 중 하나를 랜덤 선택 =====
-            string word = (dto.vocabulary ?? "").Trim();
-            string sent = (dto.munjang ?? "").Trim();
-
-            bool useSentence = !string.IsNullOrWhiteSpace(sent) && Random.value < 0.5f;
-            string token = useSentence ? sent : word;
-            if (string.IsNullOrWhiteSpace(token)) continue;
-            // ===== CHANGED 끝 =====
-
-            // ===== CHANGED: 중복 검사도 token 기준 =====
             if (preventImmediateDup && token == lastWord)
             {
-                Debug.Log("[ReWordSpawner] 직전 텍스트와 동일 → 재시도");
-                BothDTO retry = null;
-                yield return StartCoroutine(GetBoth(r => retry = r));
-                if (retry != null)
-                {
-                    word = (retry.vocabulary ?? "").Trim();
-                    sent = (retry.munjang ?? "").Trim();
-                    useSentence = !string.IsNullOrWhiteSpace(sent) && Random.value < 0.5f;
-                    token = useSentence ? sent : word;
-                    if (string.IsNullOrWhiteSpace(token)) continue;
-                }
+                Debug.Log($"[ReWordSpawner] 직전 텍스트 '{token}'와 동일 → 재시도");
+                continue;
             }
             lastWord = token;
-            // ===== CHANGED 끝 =====
 
             if (maker == null)
             {
@@ -87,22 +105,17 @@ public class ReWordSpawner : MonoBehaviour
                 continue;
             }
 
-            // ===== CHANGED: 한 문자열만 넘김 =====
-            Debug.Log($"[ReWordSpawner] MakeFallingWord 호출: {(useSentence ? "문장" : "단어")}='{token}'");
+            Debug.Log($"[ReWordSpawner] MakeFallingWord 호출: 토큰='{token}'");
             maker.MakeFallingWord(token);
-            // ===== CHANGED 끝 =====
         }
     }
 
-
     private IEnumerator GetBoth(System.Action<BothDTO> done)
     {
-        using (var req = UnityWebRequest.Get(url))
+        using (var req = UnityWebRequest.Get(bothUrl))
         {
             req.SetRequestHeader("Accept", "application/json");
             yield return req.SendWebRequest();
-
-            Debug.Log($"[ReWordSpawner] HTTP {req.responseCode} result={req.result}");
 
             if (req.result != UnityWebRequest.Result.Success)
             {
@@ -114,19 +127,6 @@ public class ReWordSpawner : MonoBehaviour
             string raw = (req.downloadHandler.text ?? "")
                          .TrimStart('\uFEFF', '\u200B', '\u0000').Trim();
 
-            if (string.IsNullOrEmpty(raw))
-            {
-                Debug.LogWarning("[ReWordSpawner] 빈 본문");
-                done(null); yield break;
-            }
-
-            int i = 0; while (i < raw.Length && char.IsWhiteSpace(raw[i])) i++;
-            if (i >= raw.Length || raw[i] != '{')
-            {
-                Debug.LogError("[ReWordSpawner] JSON 객체 아님: " + raw);
-                done(null); yield break;
-            }
-
             BothDTO dto = null;
             try { dto = JsonUtility.FromJson<BothDTO>(raw); }
             catch (System.Exception ex)
@@ -135,6 +135,43 @@ public class ReWordSpawner : MonoBehaviour
             }
 
             done(dto);
+        }
+    }
+
+    private IEnumerator GetOne(string kind, System.Action<string> done)
+    {
+        string fullUrl = oneUrl + kind;
+        using (var req = UnityWebRequest.Get(fullUrl))
+        {
+            req.SetRequestHeader("Accept", "application/json");
+            yield return req.SendWebRequest();
+
+            if (req.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogError($"[ReWordSpawner] HTTP 실패 ({fullUrl}): " + req.error);
+                yield return new WaitForSeconds(retryDelay);
+                done(null); yield break;
+            }
+
+            string raw = (req.downloadHandler.text ?? "")
+                .TrimStart('\uFEFF', '\u200B', '\u0000').Trim();
+
+            try
+            {
+                // JsonUtility.FromJson을 사용해 OneDTO로 변환
+                OneDTO dto = JsonUtility.FromJson<OneDTO>(raw);
+                if (dto != null && !string.IsNullOrEmpty(dto.text))
+                {
+                    done(dto.text);
+                    yield break;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"[ReWordSpawner] JSON 파싱 실패 ({fullUrl}): " + ex.Message);
+            }
+
+            done(null);
         }
     }
 
