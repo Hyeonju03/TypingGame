@@ -1539,6 +1539,11 @@ MonoBehaviour:
   startYOffset: 100
   outlineWidth: 0.2
   outlineColor: {r: 1, g: 0, b: 0, a: 1}
+  fallSpeed: 160
+  bottomExtra: 80
+  useCustomKillLine: 1
+  killLineY: -470
+  killLineRect: {fileID: 0}
 --- !u!1 &1045763390
 GameObject:
   m_ObjectHideFlags: 0
@@ -1905,7 +1910,7 @@ MonoBehaviour:
   spawnInterval: 1.2
   preventImmediateDup: 1
   url: http://localhost:9001/api/learn/both
-  stage: 1
+  stage: 3
   retryDelay: 0.8
 --- !u!4 &1196062051
 Transform:
