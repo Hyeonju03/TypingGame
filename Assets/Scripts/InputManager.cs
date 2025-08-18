@@ -43,6 +43,7 @@ public class InputManager : MonoBehaviour
     public void OnSubmitInput(string input)
     {
         string submittedText = input.Trim();
+        // ✅ 사용자가 입력한 값의 공백을 ^로 치환하여 비교
         string processedInput = submittedText.Replace(' ', '^');
 
         if (wordObjectMap.ContainsKey(processedInput))
@@ -50,6 +51,7 @@ public class InputManager : MonoBehaviour
             var objects = wordObjectMap[processedInput];
             if (objects.Count > 0)
             {
+                // ✅ 가장 아래쪽에 있는 오브젝트를 제거 (먼저 도달한 단어)
                 GameObject targetObj = objects.OrderBy(o => o.transform.position.y).FirstOrDefault();
 
                 if (targetObj != null)
@@ -80,7 +82,6 @@ public class InputManager : MonoBehaviour
         inputField.ActivateInputField();
     }
 
-    // ★★★ 이 메서드의 시그니처와 내부 로직을 수정했습니다. ★★★
     public void RemoveWordAndObject(GameObject obj)
     {
         if (obj == null) return;
