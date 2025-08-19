@@ -24,6 +24,7 @@ public class FallingWordMaker : MonoBehaviour
 {
     [Header("Refs")]
     public InputManager inputManager;
+    public HealthManager healthManager;
     public GameObject wordPrefab;
     public Transform spawnParent;
 
@@ -94,6 +95,7 @@ public class FallingWordMaker : MonoBehaviour
         float textWidth = 0f;
         if (label != null)
         {
+            // 텍스트 정렬 및 자동 크기 조절 설정
             label.fontSize = fontSize;
             ApplyOutline(label);
             string textToDisplay = token.Trim();
@@ -105,6 +107,10 @@ public class FallingWordMaker : MonoBehaviour
             label.fontSizeMin = 12;
             label.fontSizeMax = 40;
 
+            // ✅ 텍스트 컴포넌트의 너비를 조절하여 잘리는 현상 방지
+            var textRect = label.rectTransform;
+            textRect.sizeDelta = new Vector2(laneWidth, textRect.sizeDelta.y);
+
             var sizeFitter = obj.GetComponent<ContentSizeFitter>();
             if (sizeFitter != null)
             {
@@ -114,15 +120,16 @@ public class FallingWordMaker : MonoBehaviour
             label.ForceMeshUpdate();
             textWidth = label.renderedWidth;
 
+            // ✅ InputManager로 넘길 때 공백을 ^로 치환하여 전달
             if (inputManager != null)
             {
-                // ✅ InputManager로 넘길 때 공백을 ^로 치환하여 전달
                 inputManager.AddWordAndObject(token.Replace(' ', '^'), obj);
             }
         }
 
-        float minX = -halfW + edgePadding + textWidth / 2f;
-        float maxX = halfW - edgePadding - textWidth / 2f;
+        float halfRootW = root.rect.width / 2f;
+        float minX = -halfW + edgePadding + halfRootW;
+        float maxX = halfW - edgePadding - halfRootW;
         float clampedX = Mathf.Clamp(xCenter, minX, maxX);
         root.anchoredPosition = new Vector2(clampedX, startY);
 
@@ -152,6 +159,11 @@ public class FallingWordMaker : MonoBehaviour
 
             if (p.y <= killY) break;
             yield return null;
+        }
+
+        if (healthManager != null)
+        {
+            healthManager.TakeDamage();
         }
 
         if (inputManager != null)
