@@ -11,11 +11,6 @@ public class InputManager : MonoBehaviour
     public TMP_InputField inputField;
     public CanvasGroup transitionCanvasGroup;
 
-    // ✅ 사용하지 않는 변수 제거
-    // public int wordsToNextScene = 15;
-    // private int wordsRemoved = 0;
-    // public string nextSceneName;
-
     public event Action OnWordTyped;
     public Dictionary<string, List<GameObject>> wordObjectMap = new Dictionary<string, List<GameObject>>();
 
@@ -25,29 +20,25 @@ public class InputManager : MonoBehaviour
         {
             inputField.onEndEdit.AddListener(OnSubmitInput);
         }
-        // TODO: 시작 시 페이드 인/아웃 로직
     }
 
     public void OnSubmitInput(string input)
     {
-        if (string.IsNullOrEmpty(input))
-        {
-            return;
-        }
+        if (string.IsNullOrEmpty(input)) return;
 
         string matchedWord = null;
         GameObject matchedObject = null;
 
+        string normalizedInput = NormalizeInput(input);
+
         foreach (var pair in wordObjectMap)
         {
-            if (pair.Key.Equals(input, StringComparison.OrdinalIgnoreCase))
+            string normalizedKey = NormalizeInput(pair.Key);
+            if (normalizedKey.Equals(normalizedInput, StringComparison.OrdinalIgnoreCase))
             {
                 matchedWord = pair.Key;
                 matchedObject = pair.Value.FirstOrDefault(o => o != null);
-                if (matchedObject != null)
-                {
-                    break;
-                }
+                if (matchedObject != null) break;
             }
         }
 
@@ -55,7 +46,6 @@ public class InputManager : MonoBehaviour
         {
             Destroy(matchedObject);
             RemoveWordAndObject(matchedObject);
-
             OnWordTyped?.Invoke();
         }
 
@@ -63,7 +53,13 @@ public class InputManager : MonoBehaviour
         inputField.ActivateInputField();
     }
 
-    // ... 기존 메서드들 (AddWordAndObject, RemoveWordAndObject, ClearAllWords 등)
+    // 공백과 ^를 모두 공백으로 치환하여 비교
+    private string NormalizeInput(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+        return s.Replace('^', ' ').Trim();
+    }
+
     public void AddWordAndObject(string newWord, GameObject obj)
     {
         if (!wordObjectMap.ContainsKey(newWord))

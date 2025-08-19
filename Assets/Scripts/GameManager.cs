@@ -2,58 +2,79 @@
 using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
 using System.Collections;
-using System.Collections.Generic;
-using System.IO;
 using TMPro;
-using System;
 
 public class GameManager : MonoBehaviour
 {
+    public static GameManager Instance;
+
     [Header("Refs")]
     public InputManager inputManager;
     public HealthManager healthManager;
     public ReWordSpawner reWordSpawner;
-    public GameObject gameOverPanel; // ✅ 게임 종료 UI 패널
-    public TMP_Text gameOverText;    // ✅ 게임 오버 문구 텍스트
-    public TMP_Text gameClearText;   // ✅ 게임 클리어 문구 텍스트
-    public TMP_Text pointsText;      // ✅ 최종 포인트를 표시할 텍스트
+    public GameObject gameOverPanel;
+    public TMP_Text gameOverText;
+    public TMP_Text gameClearText;
+    public TMP_Text pointsText;
+    public CanvasGroup fadeCanvasGroup; // 페이드 아웃용
 
     [Header("Point Settings")]
     public int wordsToClearGame = 15;
     public int pointsPerClear = 150;
 
-    private int currentPoints = 0;
+    [Header("Fade Settings")]
+    public float fadeDuration = 0.5f;
+
+    [Header("DB Settings")]
+    public string userId = "your_user_id";
+    public string updatePointUrl = "http://localhost:9001/api/users/updatePoints/{0}";
+
+    [HideInInspector] public int totalPoints = 0; // 누적 포인트
+
     private int wordsTyped = 0;
     private bool gameOver = false;
 
-    void Start()
+    void Awake()
     {
-        if (inputManager != null)
+        // 싱글톤 설정
+        if (Instance != null && Instance != this)
         {
-            inputManager.OnWordTyped += OnWordTypedHandler;
+            Destroy(gameObject);
+            return;
         }
-        if (healthManager != null)
-        {
-            healthManager.OnGameOver += OnGameOverHandler;
-        }
-
-        // 게임 시작 시 패널 비활성화
-        if (gameOverPanel != null)
-        {
-            gameOverPanel.SetActive(false);
-        }
+        Instance = this;
+        DontDestroyOnLoad(gameObject);
     }
 
-    void OnDestroy()
+    void Start()
     {
-        if (inputManager != null)
-        {
-            inputManager.OnWordTyped -= OnWordTypedHandler;
-        }
-        if (healthManager != null)
-        {
-            healthManager.OnGameOver -= OnGameOverHandler;
-        }
+        // 씬 로드 이벤트 구독 (씬 전환 시 호출)
+        SceneManager.sceneLoaded += OnSceneLoaded;
+
+        if (gameOverPanel != null) gameOverPanel.SetActive(false);
+        if (fadeCanvasGroup != null) fadeCanvasGroup.alpha = 0f;
+    }
+
+    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        Debug.Log($"[GameManager] Scene '{scene.name}' loaded. Re-linking objects.");
+
+        // 새로운 씬에서 필요한 오브젝트를 다시 찾아서 연결
+        healthManager = FindObjectOfType<HealthManager>();
+        inputManager = FindObjectOfType<InputManager>();
+        reWordSpawner = FindObjectOfType<ReWordSpawner>();
+
+        // 이벤트 재구독
+        if (inputManager != null) inputManager.OnWordTyped += OnWordTypedHandler;
+        if (healthManager != null) healthManager.OnGameOver += OnGameOverHandler;
+
+        // 씬 전환 시 게임 상태 초기화
+        wordsTyped = 0;
+        gameOver = false;
+
+        // UI 초기화
+        if (gameOverPanel != null) gameOverPanel.SetActive(false);
+        if (fadeCanvasGroup != null) fadeCanvasGroup.alpha = 0f;
     }
 
     private void OnWordTypedHandler()
@@ -61,12 +82,10 @@ public class GameManager : MonoBehaviour
         if (gameOver) return;
         wordsTyped++;
 
-        Debug.Log($"단어 입력 성공! 누적 단어 수: {wordsTyped}");
-
         if (wordsTyped >= wordsToClearGame)
         {
-            currentPoints = pointsPerClear;
-            HandleGameEnd(true);
+            totalPoints += pointsPerClear;
+            StartCoroutine(HandleStageClear());
         }
     }
 
@@ -74,19 +93,51 @@ public class GameManager : MonoBehaviour
     {
         if (gameOver) return;
 
-        currentPoints = 0;
-        HandleGameEnd(false);
+        gameOver = true;
+        StartCoroutine(HandleGameOver());
     }
 
-    private void HandleGameEnd(bool isGameClear)
+    private IEnumerator HandleStageClear()
     {
         gameOver = true;
 
         // 게임 진행 관련 오브젝트 정지
-        if (reWordSpawner != null)
+        if (reWordSpawner != null) reWordSpawner.Pause();
+        if (inputManager != null)
         {
-            reWordSpawner.Pause();
+            inputManager.ClearAllWords();
+            inputManager.inputField.interactable = false;
         }
+
+        // Stage1~2는 FadeOut 후 다음 Stage
+        string currentScene = SceneManager.GetActiveScene().name;
+        string nextScene = currentScene switch
+        {
+            "Stage1" => "Stage2",
+            "Stage2" => "Stage3",
+            _ => null
+        };
+
+        if (!string.IsNullOrEmpty(nextScene))
+        {
+            yield return StartCoroutine(FadeOut());
+            SceneManager.LoadScene(nextScene);
+            yield break;
+        }
+
+        // Stage3 클리어
+        if (gameClearText != null) gameClearText.gameObject.SetActive(true);
+        if (gameOverText != null) gameOverText.gameObject.SetActive(false);
+        if (pointsText != null) pointsText.text = $"포인트: {totalPoints}";
+        if (gameOverPanel != null) gameOverPanel.SetActive(true);
+
+        yield return StartCoroutine(PostPointsToDb());
+    }
+
+    private IEnumerator HandleGameOver()
+    {
+        // 게임 진행 관련 오브젝트 정지
+        if (reWordSpawner != null) reWordSpawner.Pause();
         if (inputManager != null)
         {
             inputManager.ClearAllWords();
@@ -94,39 +145,33 @@ public class GameManager : MonoBehaviour
         }
 
         // UI 표시
-        if (gameOverPanel != null)
-        {
-            gameOverPanel.SetActive(true);
+        if (gameClearText != null) gameClearText.gameObject.SetActive(false);
+        if (gameOverText != null) gameOverText.gameObject.SetActive(true);
+        if (pointsText != null) pointsText.text = $"포인트: {totalPoints}";
+        if (gameOverPanel != null) gameOverPanel.SetActive(true);
 
-            // 텍스트 활성화/비활성화
-            if (isGameClear)
-            {
-                if (gameClearText != null) gameClearText.gameObject.SetActive(true);
-                if (gameOverText != null) gameOverText.gameObject.SetActive(false);
-                Debug.Log($"게임 클리어! 최종 포인트: {currentPoints}");
-            }
-            else
-            {
-                if (gameClearText != null) gameClearText.gameObject.SetActive(false);
-                if (gameOverText != null) gameOverText.gameObject.SetActive(true);
-                Debug.Log($"게임 오버! 최종 포인트: {currentPoints}");
-            }
-
-            // 포인트 텍스트 업데이트
-            if (pointsText != null)
-            {
-                pointsText.text = $"포인트: {currentPoints}";
-            }
-        }
-
-        string userId = "your_user_id";
-        StartCoroutine(PostPointsToDb(userId, currentPoints));
+        // DB 전송
+        yield return StartCoroutine(PostPointsToDb());
     }
 
-    private IEnumerator PostPointsToDb(string userId, int points)
+    private IEnumerator FadeOut()
     {
-        string url = $"http://localhost:9001/api/users/updatePoints/{userId}";
-        string jsonData = JsonUtility.ToJson(new PointData { points = points });
+        if (fadeCanvasGroup == null) yield break;
+
+        float elapsed = 0f;
+        while (elapsed < fadeDuration)
+        {
+            elapsed += Time.deltaTime;
+            fadeCanvasGroup.alpha = Mathf.Clamp01(elapsed / fadeDuration);
+            yield return null;
+        }
+        fadeCanvasGroup.alpha = 1f;
+    }
+
+    private IEnumerator PostPointsToDb()
+    {
+        string url = string.Format(updatePointUrl, userId);
+        string jsonData = JsonUtility.ToJson(new PointData { points = totalPoints });
 
         using (UnityWebRequest www = new UnityWebRequest(url, "PUT"))
         {
