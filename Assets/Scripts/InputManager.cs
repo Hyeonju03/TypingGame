@@ -1,14 +1,23 @@
-using System.Collections;
+ï»¿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
+using System.Linq;
+using System;
 
 public class InputManager : MonoBehaviour
 {
+    [Header("Refs")]
     public TMP_InputField inputField;
+    public CanvasGroup transitionCanvasGroup;
 
-    // ´Ù¸¥ ½ºÅ©¸³Æ®¿¡¼­ Á¢±ÙÇÒ ¼ö ÀÖµµ·Ï publicÀ¸·Î ¼±¾ğ
-    public List<string> wordList = new List<string>();
+    // âœ… ì‚¬ìš©í•˜ì§€ ì•ŠëŠ” ë³€ìˆ˜ ì œê±°
+    // public int wordsToNextScene = 15;
+    // private int wordsRemoved = 0;
+    // public string nextSceneName;
+
+    public event Action OnWordTyped;
+    public Dictionary<string, List<GameObject>> wordObjectMap = new Dictionary<string, List<GameObject>>();
 
     void Start()
     {
@@ -16,45 +25,86 @@ public class InputManager : MonoBehaviour
         {
             inputField.onEndEdit.AddListener(OnSubmitInput);
         }
-    }
-
-    // ¿ÜºÎ¿¡¼­ ´Ü¾î¸¦ Ãß°¡ÇÒ ¶§ È£ÃâÇÒ ¸Ş¼­µå
-    public void AddWord(string newWord)
-    {
-        wordList.Add(newWord);
-        Debug.Log("»õ·Î¿î ´Ü¾î°¡ Ãß°¡µÇ¾ú½À´Ï´Ù: " + newWord);
+        // TODO: ì‹œì‘ ì‹œ í˜ì´ë“œ ì¸/ì•„ì›ƒ ë¡œì§
     }
 
     public void OnSubmitInput(string input)
     {
-
-        string submittedText = input.Trim();
-        bool found = false;
-
-        for (int i = 0; i < wordList.Count; i++)
+        if (string.IsNullOrEmpty(input))
         {
-            if (wordList[i] == submittedText)
+            return;
+        }
+
+        string matchedWord = null;
+        GameObject matchedObject = null;
+
+        foreach (var pair in wordObjectMap)
+        {
+            if (pair.Key.Equals(input, StringComparison.OrdinalIgnoreCase))
             {
-                Debug.Log("Á¤´äÀÔ´Ï´Ù! '" + submittedText + "'¸¦ ¼º°øÀûÀ¸·Î Á¦°ÅÇß½À´Ï´Ù.");
-
-                // ´Ü¾î ¸®½ºÆ®¿¡¼­ Á¦°Å
-                wordList.RemoveAt(i);
-
-                // (ÀÌ ºÎºĞ¿¡ ½ÇÁ¦ °ÔÀÓ ¿ÀºêÁ§Æ®¸¦ Ã£¾Æ Á¦°ÅÇÏ´Â ·ÎÁ÷ Ãß°¡)
-
-                found = true;
-                break;
+                matchedWord = pair.Key;
+                matchedObject = pair.Value.FirstOrDefault(o => o != null);
+                if (matchedObject != null)
+                {
+                    break;
+                }
             }
+        }
+
+        if (matchedObject != null)
+        {
+            Destroy(matchedObject);
+            RemoveWordAndObject(matchedObject);
+
+            OnWordTyped?.Invoke();
         }
 
         inputField.text = "";
         inputField.ActivateInputField();
-        return;
     }
 
-    // Update is called once per frame
-    void Update()
+    // ... ê¸°ì¡´ ë©”ì„œë“œë“¤ (AddWordAndObject, RemoveWordAndObject, ClearAllWords ë“±)
+    public void AddWordAndObject(string newWord, GameObject obj)
     {
-        
+        if (!wordObjectMap.ContainsKey(newWord))
+        {
+            wordObjectMap[newWord] = new List<GameObject>();
+        }
+        wordObjectMap[newWord].Add(obj);
+    }
+
+    public void ClearAllWords()
+    {
+        foreach (var list in wordObjectMap.Values)
+        {
+            foreach (var obj in list)
+            {
+                Destroy(obj);
+            }
+        }
+        wordObjectMap.Clear();
+    }
+
+    public void RemoveWordAndObject(GameObject obj)
+    {
+        if (obj == null) return;
+        string wordToRemove = null;
+        foreach (var entry in wordObjectMap)
+        {
+            if (entry.Value.Contains(obj))
+            {
+                wordToRemove = entry.Key;
+                break;
+            }
+        }
+        if (wordToRemove != null)
+        {
+            var objects = wordObjectMap[wordToRemove];
+            objects.Remove(obj);
+            if (objects.Count == 0)
+            {
+                wordObjectMap.Remove(wordToRemove);
+            }
+        }
     }
 }

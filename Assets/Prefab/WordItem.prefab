@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 6522022972570188461}
   m_Layer: 5
   m_Name: WordItem
-  m_TagString: Untagged
+  m_TagString: Word
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -35,7 +35,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 400}
-  m_SizeDelta: {x: 900, y: 100}
+  m_SizeDelta: {x: 1200, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &3939756818373568440
 CanvasRenderer:

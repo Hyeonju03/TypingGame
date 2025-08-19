@@ -1,14 +1,32 @@
-﻿// FallingWordMaker.cs — 단일 TMP로 단어/문장 표시(문장 ^→공백 치환, 줄바꿈/높이 자동)
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using System;
+using System.Linq;
+using UnityEngine.UI;
+
+// 리스트 확장 메서드를 별도의 파일에 추가하는 것을 권장합니다.
+public static class ListExtensions
+{
+    public static T GetRandomItem<T>(this List<T> list)
+    {
+        if (list == null || list.Count == 0)
+        {
+            return default(T);
+        }
+        int randomIndex = UnityEngine.Random.Range(0, list.Count);
+        return list[randomIndex];
+    }
+}
 
 public class FallingWordMaker : MonoBehaviour
 {
-    [Header("Prefab & Canvas")]
-    public GameObject wordPrefab;   // TMP_Text 1개만 포함된 프리팹
-    public Transform spawnParent;   // Canvas(=RectTransform)
+    [Header("Refs")]
+    public InputManager inputManager;
+    public HealthManager healthManager;
+    public GameObject wordPrefab;
+    public Transform spawnParent;
 
     [Header("Spawn Settings")]
     public int laneCount = 5;
@@ -16,30 +34,40 @@ public class FallingWordMaker : MonoBehaviour
     public float startYOffset = 40f;
     public float outlineWidth = 0.2f;
     public Color outlineColor = Color.red;
+    public float fontSize = 36f;
 
     [Header("Fall Settings")]
     public float fallSpeed = 160f;
     public float bottomExtra = 80f;
 
-    private readonly Queue<int> recentLanes = new();
+    [Header("Kill Line (숫자값으로만 사용)")]
+    public bool useCustomKillLine = true;
+    public float killLineY = -120f;
+    public RectTransform killLineRect;
 
-    private void Awake()
+    private readonly Queue<int> recentLanes = new();
+    private float laneWidth;
+
+    void Awake()
     {
         if (spawnParent == null)
         {
             var canvas = FindObjectOfType<Canvas>();
             if (canvas) spawnParent = canvas.transform;
         }
+
+        if (spawnParent != null)
+        {
+            var canvasRect = spawnParent.GetComponent<RectTransform>();
+            if (canvasRect != null)
+            {
+                float usableW = (canvasRect.rect.width - edgePadding * 2);
+                laneWidth = usableW / Mathf.Max(1, laneCount);
+            }
+        }
     }
 
-    // 단일 문자열 버전(권장: ReWordSpawner가 token만 넘김)
-    public void MakeFallingWord(string token) => Spawn(token);
-
-    // 호환용: (word, sentence) 중 비어있지 않은 쪽 사용
-    public void MakeFallingWord(string word, string sentence)
-        => Spawn(!string.IsNullOrWhiteSpace(sentence) ? sentence : word);
-
-    private void Spawn(string token)
+    public void MakeFallingWord(string token)
     {
         if (spawnParent == null || wordPrefab == null) return;
 
@@ -50,77 +78,97 @@ public class FallingWordMaker : MonoBehaviour
         float halfH = canvasRect.rect.height * 0.5f;
         float startY = halfH + startYOffset;
 
-        // 레인 폭 계산
         float usableW = (halfW - edgePadding) - (-halfW + edgePadding);
         float laneWidth = usableW / Mathf.Max(1, laneCount);
         float xLeft = -halfW + edgePadding;
 
-        // 최근 사용 레인 제외
         List<int> candidates = new();
         for (int i = 0; i < laneCount; i++) if (!recentLanes.Contains(i)) candidates.Add(i);
         if (candidates.Count == 0) { recentLanes.Clear(); for (int i = 0; i < laneCount; i++) candidates.Add(i); }
-
-        int laneIdx = candidates[Random.Range(0, candidates.Count)];
+        int laneIdx = candidates.Count > 0 ? candidates.GetRandomItem() : 0;
         float xCenter = xLeft + (laneIdx + 0.5f) * laneWidth;
 
-        // 프리팹 생성/배치
         var obj = Instantiate(wordPrefab, spawnParent);
         var root = obj.GetComponent<RectTransform>();
-        root.anchoredPosition = new Vector2(xCenter, startY);
 
-        // TMP 하나만 사용
         var label = obj.GetComponentInChildren<TMP_Text>();
+        float textWidth = 0f;
         if (label != null)
         {
-            // ^ → 공백 치환 후 세팅
-            string text = (token ?? string.Empty).Replace("^", " ").Trim();
-            label.text = text;
-
-            // 외곽선
+            // 텍스트 정렬 및 자동 크기 조절 설정
+            label.fontSize = fontSize;
             ApplyOutline(label);
+            string textToDisplay = token.Trim();
+            label.text = textToDisplay;
 
-            // 줄바꿈/오토사이즈 강제
+            label.alignment = TextAlignmentOptions.TopLeft;
             label.enableWordWrapping = true;
             label.enableAutoSizing = true;
             label.fontSizeMin = 12;
-            label.fontSizeMax = 24;
-            label.alignment = TextAlignmentOptions.TopLeft;
+            label.fontSizeMax = 40;
 
-            // 레인 폭에 맞춰 가로폭 고정
-            var lRect = label.GetComponent<RectTransform>();
-            lRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, Mathf.Max(120f, laneWidth - 20f));
+            // ✅ 텍스트 컴포넌트의 너비를 조절하여 잘리는 현상 방지
+            var textRect = label.rectTransform;
+            textRect.sizeDelta = new Vector2(laneWidth, textRect.sizeDelta.y);
 
-            // 내용 기준으로 세로 높이 확장(루트도 함께 확장해 잘림 방지)
+            var sizeFitter = obj.GetComponent<ContentSizeFitter>();
+            if (sizeFitter != null)
+            {
+                sizeFitter.SetLayoutVertical();
+                sizeFitter.SetLayoutHorizontal();
+            }
             label.ForceMeshUpdate();
-            float h = Mathf.Ceil(label.preferredHeight) + 8f; // 패딩
-            lRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, h);
-            root.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, h);
+            textWidth = label.renderedWidth;
+
+            // ✅ InputManager로 넘길 때 공백을 ^로 치환하여 전달
+            if (inputManager != null)
+            {
+                inputManager.AddWordAndObject(token.Replace(' ', '^'), obj);
+            }
         }
 
-        // 최근 레인 기록
+        float halfRootW = root.rect.width / 2f;
+        float minX = -halfW + edgePadding + halfRootW;
+        float maxX = halfW - edgePadding - halfRootW;
+        float clampedX = Mathf.Clamp(xCenter, minX, maxX);
+        root.anchoredPosition = new Vector2(clampedX, startY);
+
+        float killY = useCustomKillLine ? killLineY : (-halfH - bottomExtra);
+        StartCoroutine(FallDown(rect: root, obj: obj, killY: killY));
+
         recentLanes.Enqueue(laneIdx);
         while (recentLanes.Count > laneCount - 1) recentLanes.Dequeue();
-
-        // 낙하
-        StartCoroutine(FallDown(root, obj, -halfH - bottomExtra));
     }
 
-    private void ApplyOutline(TMP_Text label)
+    void ApplyOutline(TMP_Text label)
     {
         var mat = label.fontMaterial;
-        TMPro.ShaderUtilities.GetShaderPropertyIDs();
         mat.EnableKeyword("OUTLINE_ON");
-        mat.SetFloat(TMPro.ShaderUtilities.ID_OutlineWidth, outlineWidth);
-        mat.SetColor(TMPro.ShaderUtilities.ID_OutlineColor, outlineColor);
+        mat.SetFloat(ShaderUtilities.ID_OutlineWidth, outlineWidth);
+        mat.SetColor(ShaderUtilities.ID_OutlineColor, outlineColor);
         label.fontMaterial = mat;
     }
 
-    private IEnumerator FallDown(RectTransform rect, GameObject obj, float killY)
+    IEnumerator FallDown(RectTransform rect, GameObject obj, float killY)
     {
-        while (rect.anchoredPosition.y > killY)
+        while (true)
         {
-            rect.anchoredPosition -= new Vector2(0, fallSpeed * Time.deltaTime);
+            var p = rect.anchoredPosition;
+            p.y -= fallSpeed * Time.deltaTime;
+            rect.anchoredPosition = p;
+
+            if (p.y <= killY) break;
             yield return null;
+        }
+
+        if (healthManager != null)
+        {
+            healthManager.TakeDamage();
+        }
+
+        if (inputManager != null)
+        {
+            inputManager.RemoveWordAndObject(obj);
         }
         Destroy(obj);
     }
