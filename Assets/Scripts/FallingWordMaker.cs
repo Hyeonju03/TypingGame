@@ -6,10 +6,25 @@ using System;
 using System.Linq;
 using UnityEngine.UI;
 
+// 리스트 확장 메서드를 별도의 파일에 추가하는 것을 권장합니다.
+public static class ListExtensions
+{
+    public static T GetRandomItem<T>(this List<T> list)
+    {
+        if (list == null || list.Count == 0)
+        {
+            return default(T);
+        }
+        int randomIndex = UnityEngine.Random.Range(0, list.Count);
+        return list[randomIndex];
+    }
+}
+
 public class FallingWordMaker : MonoBehaviour
 {
     [Header("Refs")]
     public InputManager inputManager;
+    public HealthManager healthManager;
     public GameObject wordPrefab;
     public Transform spawnParent;
 
@@ -22,13 +37,13 @@ public class FallingWordMaker : MonoBehaviour
     public float fontSize = 36f;
 
     [Header("Fall Settings")]
-    public float fallSpeed = 160f;          // px/sec
-    public float bottomExtra = 80f;         // KillLineY 미사용 시 화면 아래 여유
+    public float fallSpeed = 160f;
+    public float bottomExtra = 80f;
 
     [Header("Kill Line (숫자값으로만 사용)")]
-    public bool useCustomKillLine = true;   // ✅ 라인 오브젝트 없이 숫자값만 사용
-    public float killLineY = -120f;         // ✅ 캔버스 로컬Y(원하는 삭제 높이)
-    public RectTransform killLineRect;      // ❌ 비워두기
+    public bool useCustomKillLine = true;
+    public float killLineY = -120f;
+    public RectTransform killLineRect;
 
     private readonly Queue<int> recentLanes = new();
     private float laneWidth;
@@ -41,29 +56,18 @@ public class FallingWordMaker : MonoBehaviour
             if (canvas) spawnParent = canvas.transform;
         }
 
-        laneWidth = (spawnParent.GetComponent<RectTransform>().rect.width - edgePadding * 2) / laneCount;
+        if (spawnParent != null)
+        {
+            var canvasRect = spawnParent.GetComponent<RectTransform>();
+            if (canvasRect != null)
+            {
+                float usableW = (canvasRect.rect.width - edgePadding * 2);
+                laneWidth = usableW / Mathf.Max(1, laneCount);
+            }
+        }
     }
 
-    public void MakeFallingWord(string token) => Spawn(token);
-
-
-    public void MakeFallingWord(string word, string sentence)
-        => Spawn(!string.IsNullOrWhiteSpace(sentence) ? sentence : word);
-
-    private void Spawn(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return;
-        text = text.Trim();
-
-        GameObject obj = Instantiate(wordPrefab, spawnParent);
-        RectTransform root = obj.GetComponent<RectTransform>();
-
-        root.pivot = new Vector2(0, 1);
-        root.anchorMin = new Vector2(0, 1);
-        root.anchorMax = new Vector2(0, 1);
-
-
-    void Spawn(string token)
+    public void MakeFallingWord(string token)
     {
         if (spawnParent == null || wordPrefab == null) return;
 
@@ -74,35 +78,38 @@ public class FallingWordMaker : MonoBehaviour
         float halfH = canvasRect.rect.height * 0.5f;
         float startY = halfH + startYOffset;
 
-        // 레인 계산
         float usableW = (halfW - edgePadding) - (-halfW + edgePadding);
         float laneWidth = usableW / Mathf.Max(1, laneCount);
         float xLeft = -halfW + edgePadding;
 
-        // 최근 레인 제외
         List<int> candidates = new();
         for (int i = 0; i < laneCount; i++) if (!recentLanes.Contains(i)) candidates.Add(i);
         if (candidates.Count == 0) { recentLanes.Clear(); for (int i = 0; i < laneCount; i++) candidates.Add(i); }
-        int laneIdx = candidates[Random.Range(0, candidates.Count)];
+        int laneIdx = candidates.Count > 0 ? candidates.GetRandomItem() : 0;
         float xCenter = xLeft + (laneIdx + 0.5f) * laneWidth;
 
-        // 생성/배치 (UI 좌표)
         var obj = Instantiate(wordPrefab, spawnParent);
         var root = obj.GetComponent<RectTransform>();
-        root.anchoredPosition = new Vector2(xCenter, startY);
-
-        // 텍스트 세팅
 
         var label = obj.GetComponentInChildren<TMP_Text>();
-        if (label)
+        float textWidth = 0f;
+        if (label != null)
         {
+            // 텍스트 정렬 및 자동 크기 조절 설정
             label.fontSize = fontSize;
             ApplyOutline(label);
+            string textToDisplay = token.Trim();
+            label.text = textToDisplay;
 
-            label.text = text.Replace('^', ' ');
             label.alignment = TextAlignmentOptions.TopLeft;
-
             label.enableWordWrapping = true;
+            label.enableAutoSizing = true;
+            label.fontSizeMin = 12;
+            label.fontSizeMax = 40;
+
+            // ✅ 텍스트 컴포넌트의 너비를 조절하여 잘리는 현상 방지
+            var textRect = label.rectTransform;
+            textRect.sizeDelta = new Vector2(laneWidth, textRect.sizeDelta.y);
 
             var sizeFitter = obj.GetComponent<ContentSizeFitter>();
             if (sizeFitter != null)
@@ -110,59 +117,23 @@ public class FallingWordMaker : MonoBehaviour
                 sizeFitter.SetLayoutVertical();
                 sizeFitter.SetLayoutHorizontal();
             }
+            label.ForceMeshUpdate();
+            textWidth = label.renderedWidth;
 
+            // ✅ InputManager로 넘길 때 공백을 ^로 치환하여 전달
             if (inputManager != null)
             {
-                inputManager.AddWordAndObject(text, obj);
+                inputManager.AddWordAndObject(token.Replace(' ', '^'), obj);
             }
         }
 
-        int laneIdx = -1;
-        var availableLanes = Enumerable.Range(0, laneCount).Except(recentLanes);
-        if (availableLanes.Any())
-        {
-            laneIdx = availableLanes.OrderBy(_ => Guid.NewGuid()).FirstOrDefault();
-        }
-        else
-        {
-            laneIdx = UnityEngine.Random.Range(0, laneCount);
-        }
+        float halfRootW = root.rect.width / 2f;
+        float minX = -halfW + edgePadding + halfRootW;
+        float maxX = halfW - edgePadding - halfRootW;
+        float clampedX = Mathf.Clamp(xCenter, minX, maxX);
+        root.anchoredPosition = new Vector2(clampedX, startY);
 
-        recentLanes.Enqueue(laneIdx);
-        while (recentLanes.Count > laneCount - 1) recentLanes.Dequeue();
-
-        float fullW = spawnParent.GetComponent<RectTransform>().rect.width;
-        float startX = (fullW - laneWidth * laneCount) / 2f + laneWidth * laneIdx;
-        root.anchoredPosition = new Vector2(startX + 10f, spawnParent.GetComponent<RectTransform>().rect.height / 2f + startYOffset);
-
-        root.sizeDelta = new Vector2(laneWidth - 20, root.sizeDelta.y);
-
-        float killY = -spawnParent.GetComponent<RectTransform>().rect.height - bottomExtra;
-        StartCoroutine(FallDown(root, obj, killY));
-            string text = (token ?? string.Empty).Replace("^", " ").Trim();
-            label.text = text;
-
-            ApplyOutline(label);
-            label.enableWordWrapping = true;
-            label.enableAutoSizing = true;
-            label.fontSizeMin = 12; label.fontSizeMax = 24;
-            label.alignment = TextAlignmentOptions.TopLeft;
-
-            var lRect = label.GetComponent<RectTransform>();
-            float targetWidth = Mathf.Max(120f, laneWidth - 20f);
-            lRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, targetWidth);
-
-            label.ForceMeshUpdate();
-            float h = Mathf.Ceil(label.preferredHeight) + 8f;
-            lRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, h);
-            root.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, h);
-        }
-
-        // ✅ 숫자 KillLineY 사용 (라인 오브젝트 없이)
-        float killY = useCustomKillLine
-            ? killLineY
-            : (-halfH - bottomExtra); // 필요 시 화면 아래로 폴백
-
+        float killY = useCustomKillLine ? killLineY : (-halfH - bottomExtra);
         StartCoroutine(FallDown(rect: root, obj: obj, killY: killY));
 
         recentLanes.Enqueue(laneIdx);
@@ -172,10 +143,9 @@ public class FallingWordMaker : MonoBehaviour
     void ApplyOutline(TMP_Text label)
     {
         var mat = label.fontMaterial;
-        TMPro.ShaderUtilities.GetShaderPropertyIDs();
         mat.EnableKeyword("OUTLINE_ON");
-        mat.SetFloat(TMPro.ShaderUtilities.ID_OutlineWidth, outlineWidth);
-        mat.SetColor(TMPro.ShaderUtilities.ID_OutlineColor, outlineColor);
+        mat.SetFloat(ShaderUtilities.ID_OutlineWidth, outlineWidth);
+        mat.SetColor(ShaderUtilities.ID_OutlineColor, outlineColor);
         label.fontMaterial = mat;
     }
 
@@ -187,11 +157,13 @@ public class FallingWordMaker : MonoBehaviour
             p.y -= fallSpeed * Time.deltaTime;
             rect.anchoredPosition = p;
 
-            // 🔻 텍스트 "하단" Y (pivot/높이 반영)
-            float textBottom = p.y - rect.pivot.y * rect.rect.height;
-
-            if (textBottom <= killY) break;
+            if (p.y <= killY) break;
             yield return null;
+        }
+
+        if (healthManager != null)
+        {
+            healthManager.TakeDamage();
         }
 
         if (inputManager != null)
