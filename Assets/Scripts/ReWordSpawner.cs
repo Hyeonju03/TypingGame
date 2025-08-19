@@ -151,7 +151,16 @@ public class ReWordSpawner : MonoBehaviour
         }
 
         Debug.Log($"[ReWordSpawner] MakeFallingWord 호출: 토큰='{token}'");
-        maker.MakeFallingWord(token);
+
+        // 1. FallingWordMaker에서 오브젝트를 받아옵니다.
+        GameObject newWordObject = maker.MakeFallingWord(token);
+
+        // 2. 받은 오브젝트 정보를 InputManager에 전달합니다.
+        if (newWordObject != null && GameManager.Instance.inputManager != null)
+        {
+            GameManager.Instance.inputManager.AddWordAndObject(token, newWordObject);
+            Debug.Log($"[ReWordSpawner] '{token}' 단어를 InputManager에 등록했습니다.");
+        }
     }
 
     private IEnumerator SpawnLoop()
@@ -179,7 +188,7 @@ public class ReWordSpawner : MonoBehaviour
             }
 
             string raw = (req.downloadHandler.text ?? "")
-                         .TrimStart('\uFEFF', '\u200B', '\u0000').Trim();
+                               .TrimStart('\uFEFF', '\u200B', '\u0000').Trim();
 
             BothDTO dto = null;
             try { dto = JsonUtility.FromJson<BothDTO>(raw); }

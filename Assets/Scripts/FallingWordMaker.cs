@@ -5,6 +5,7 @@ using UnityEngine;
 using System;
 using System.Linq;
 using UnityEngine.UI;
+using System.Text.RegularExpressions;
 
 // 리스트 확장 메서드를 별도의 파일에 추가하는 것을 권장합니다.
 public static class ListExtensions
@@ -67,12 +68,12 @@ public class FallingWordMaker : MonoBehaviour
         }
     }
 
-    public void MakeFallingWord(string token)
+    public GameObject MakeFallingWord(string token) // ✅ GameObject를 반환하도록 수정
     {
-        if (spawnParent == null || wordPrefab == null) return;
+        if (spawnParent == null || wordPrefab == null) return null; // ✅ null 반환
 
         var canvasRect = spawnParent.GetComponent<RectTransform>();
-        if (canvasRect == null) return;
+        if (canvasRect == null) return null; // ✅ null 반환
 
         float halfW = canvasRect.rect.width * 0.5f;
         float halfH = canvasRect.rect.height * 0.5f;
@@ -95,7 +96,6 @@ public class FallingWordMaker : MonoBehaviour
         float textWidth = 0f;
         if (label != null)
         {
-            // 텍스트 정렬 및 자동 크기 조절 설정
             label.fontSize = fontSize;
             ApplyOutline(label);
             string textToDisplay = token.Trim();
@@ -107,7 +107,6 @@ public class FallingWordMaker : MonoBehaviour
             label.fontSizeMin = 12;
             label.fontSizeMax = 40;
 
-            // ✅ 텍스트 컴포넌트의 너비를 조절하여 잘리는 현상 방지
             var textRect = label.rectTransform;
             textRect.sizeDelta = new Vector2(laneWidth, textRect.sizeDelta.y);
 
@@ -120,11 +119,8 @@ public class FallingWordMaker : MonoBehaviour
             label.ForceMeshUpdate();
             textWidth = label.renderedWidth;
 
-            // ✅ InputManager로 넘길 때 공백을 ^로 치환하여 전달
-            if (inputManager != null)
-            {
-                inputManager.AddWordAndObject(token.Replace(' ', '^'), obj);
-            }
+            // ✅ InputManager에 대한 직접 호출 코드를 제거
+            // inputManager.AddWordAndObject(token.Replace(' ', '^'), obj);
         }
 
         float halfRootW = root.rect.width / 2f;
@@ -138,6 +134,8 @@ public class FallingWordMaker : MonoBehaviour
 
         recentLanes.Enqueue(laneIdx);
         while (recentLanes.Count > laneCount - 1) recentLanes.Dequeue();
+
+        return obj; // ✅ 생성된 오브젝트를 반환
     }
 
     void ApplyOutline(TMP_Text label)

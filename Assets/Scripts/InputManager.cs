@@ -7,6 +7,8 @@ using System;
 
 public class InputManager : MonoBehaviour
 {
+    public static InputManager Instance; // 👈 이 줄을 추가해야 합니다.
+
     [Header("Refs")]
     public TMP_InputField inputField;
     public CanvasGroup transitionCanvasGroup;
@@ -14,12 +16,27 @@ public class InputManager : MonoBehaviour
     public event Action OnWordTyped;
     public Dictionary<string, List<GameObject>> wordObjectMap = new Dictionary<string, List<GameObject>>();
 
-    void Start()
+    private void Awake()
     {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(this.gameObject);
+            return;
+        }
+        Instance = this;
+        // DontDestroyOnLoad(gameObject); // InputManager는 씬마다 존재하므로 이 코드는 필요 없습니다.
+
+        inputField = FindObjectOfType<TMP_InputField>();
         if (inputField != null)
         {
             inputField.onEndEdit.AddListener(OnSubmitInput);
         }
+    }
+
+    void Start()
+    {
+        // Start 함수에 기존에 있던 onEndEdit.AddListener 코드는 Awake로 옮겼으므로 여기서는 제거합니다.
+        // 현재 코드에서는 Start에 아무것도 없습니다.
     }
 
     public void OnSubmitInput(string input)
@@ -53,7 +70,6 @@ public class InputManager : MonoBehaviour
         inputField.ActivateInputField();
     }
 
-    // 공백과 ^를 모두 공백으로 치환하여 비교
     private string NormalizeInput(string s)
     {
         if (string.IsNullOrEmpty(s)) return "";

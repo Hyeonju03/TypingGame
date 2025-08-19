@@ -2,7 +2,9 @@
 using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
 using System.Collections;
+using System.Collections.Generic;
 using TMPro;
+using System;
 
 public class GameManager : MonoBehaviour
 {
@@ -16,7 +18,7 @@ public class GameManager : MonoBehaviour
     public TMP_Text gameOverText;
     public TMP_Text gameClearText;
     public TMP_Text pointsText;
-    public CanvasGroup fadeCanvasGroup; // 페이드 아웃용
+    public CanvasGroup fadeCanvasGroup;
 
     [Header("Point Settings")]
     public int wordsToClearGame = 15;
@@ -29,7 +31,7 @@ public class GameManager : MonoBehaviour
     public string userId = "your_user_id";
     public string updatePointUrl = "http://localhost:9001/api/users/updatePoints/{0}";
 
-    [HideInInspector] public int totalPoints = 0; // 누적 포인트
+    [HideInInspector] public int totalPoints = 0;
 
     private int wordsTyped = 0;
     private bool gameOver = false;
@@ -53,34 +55,60 @@ public class GameManager : MonoBehaviour
 
         if (gameOverPanel != null) gameOverPanel.SetActive(false);
         if (fadeCanvasGroup != null) fadeCanvasGroup.alpha = 0f;
+
+        // 게임 시작 시에도 이벤트 구독을 시도합니다.
+        SubscribeEvents();
     }
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         Debug.Log($"[GameManager] Scene '{scene.name}' loaded. Re-linking objects.");
 
-        // 새로운 씬에서 필요한 오브젝트를 다시 찾아서 연결
-        healthManager = FindObjectOfType<HealthManager>();
-        inputManager = FindObjectOfType<InputManager>();
+        // 새로운 씬에서 ReWordSpawner를 찾아서 연결합니다.
         reWordSpawner = FindObjectOfType<ReWordSpawner>();
 
-        // 이벤트 재구독
-        if (inputManager != null) inputManager.OnWordTyped += OnWordTypedHandler;
-        if (healthManager != null) healthManager.OnGameOver += OnGameOverHandler;
+        // 씬이 로드될 때마다 이벤트를 다시 구독합니다.
+        SubscribeEvents();
 
-        // 씬 전환 시 게임 상태 초기화
+        // 씬 전환 시 게임 상태를 초기화합니다.
         wordsTyped = 0;
         gameOver = false;
 
-        // UI 초기화
+        // UI를 초기화합니다.
         if (gameOverPanel != null) gameOverPanel.SetActive(false);
         if (fadeCanvasGroup != null) fadeCanvasGroup.alpha = 0f;
+
+        // 씬 로드 시 체력을 리셋합니다.
+        if (healthManager != null) healthManager.ResetHealth();
+    }
+
+    private void SubscribeEvents()
+    {
+        // 이전 구독 해지 (혹시 모를 중복 구독 방지)
+        if (InputManager.Instance != null) InputManager.Instance.OnWordTyped -= OnWordTypedHandler;
+        // HealthManager는 씬마다 다르므로 FindObjectOfType으로 찾은 후 해지합니다.
+        healthManager = FindObjectOfType<HealthManager>();
+        if (healthManager != null) healthManager.OnGameOver -= OnGameOverHandler;
+
+        // 새로운 씬의 오브젝트를 찾아서 연결하고 이벤트를 구독합니다.
+        if (InputManager.Instance != null)
+        {
+            InputManager.Instance.OnWordTyped += OnWordTypedHandler;
+        }
+
+        if (healthManager != null)
+        {
+            healthManager.OnGameOver += OnGameOverHandler;
+        }
+
+        Debug.Log("[GameManager] Events subscribed.");
     }
 
     private void OnWordTypedHandler()
     {
         if (gameOver) return;
         wordsTyped++;
+        Debug.Log($"wordsTyped>>>>>>>>>>>>>>>>>>>>>>>>>>>> '{wordsTyped}'");
 
         if (wordsTyped >= wordsToClearGame)
         {
@@ -94,6 +122,7 @@ public class GameManager : MonoBehaviour
         if (gameOver) return;
 
         gameOver = true;
+        Debug.Log("Game over handler called.");
         StartCoroutine(HandleGameOver());
     }
 
@@ -101,15 +130,13 @@ public class GameManager : MonoBehaviour
     {
         gameOver = true;
 
-        // 게임 진행 관련 오브젝트 정지
         if (reWordSpawner != null) reWordSpawner.Pause();
-        if (inputManager != null)
+        if (InputManager.Instance != null)
         {
-            inputManager.ClearAllWords();
-            inputManager.inputField.interactable = false;
+            InputManager.Instance.ClearAllWords();
+            InputManager.Instance.inputField.interactable = false;
         }
 
-        // Stage1~2는 FadeOut 후 다음 Stage
         string currentScene = SceneManager.GetActiveScene().name;
         string nextScene = currentScene switch
         {
@@ -125,7 +152,6 @@ public class GameManager : MonoBehaviour
             yield break;
         }
 
-        // Stage3 클리어
         if (gameClearText != null) gameClearText.gameObject.SetActive(true);
         if (gameOverText != null) gameOverText.gameObject.SetActive(false);
         if (pointsText != null) pointsText.text = $"포인트: {totalPoints}";
@@ -136,21 +162,18 @@ public class GameManager : MonoBehaviour
 
     private IEnumerator HandleGameOver()
     {
-        // 게임 진행 관련 오브젝트 정지
         if (reWordSpawner != null) reWordSpawner.Pause();
-        if (inputManager != null)
+        if (InputManager.Instance != null)
         {
-            inputManager.ClearAllWords();
-            inputManager.inputField.interactable = false;
+            InputManager.Instance.ClearAllWords();
+            InputManager.Instance.inputField.interactable = false;
         }
 
-        // UI 표시
         if (gameClearText != null) gameClearText.gameObject.SetActive(false);
         if (gameOverText != null) gameOverText.gameObject.SetActive(true);
         if (pointsText != null) pointsText.text = $"포인트: {totalPoints}";
         if (gameOverPanel != null) gameOverPanel.SetActive(true);
 
-        // DB 전송
         yield return StartCoroutine(PostPointsToDb());
     }
 
