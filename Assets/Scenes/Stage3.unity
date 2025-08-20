@@ -1175,8 +1175,8 @@ RectTransform:
   - {fileID: 261968930}
   - {fileID: 857663699}
   - {fileID: 320900504}
-  - {fileID: 1067383219}
   - {fileID: 1882834531}
+  - {fileID: 1067383219}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -1320,9 +1320,8 @@ MonoBehaviour:
   pointsText: {fileID: 1449085353}
   fadeCanvasGroup: {fileID: 1882834532}
   wordsToClearGame: 15
-  pointsPerClear: 150
+  pointsPerClear: 50
   fadeDuration: 0.5
-  userId: 1
   updatePointUrl: http://localhost:9001/api/users/updatePoints/{0}
   totalPoints: 0
 --- !u!4 &1072444699
@@ -1981,7 +1980,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   inputField: {fileID: 261968931}
-  transitionCanvasGroup: {fileID: 1882834532}
 --- !u!4 &1513647422
 Transform:
   m_ObjectHideFlags: 0
@@ -3591,6 +3589,7 @@ GameObject:
   - component: {fileID: 2038966032}
   - component: {fileID: 2038966031}
   - component: {fileID: 2038966030}
+  - component: {fileID: 2038966033}
   m_Layer: 5
   m_Name: ToMainButton
   m_TagString: Untagged
@@ -3712,18 +3711,30 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2038966028}
   m_CullTransparentMesh: 1
+--- !u!114 &2038966033
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2038966028}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b6b9f3bf150036b4689d137b88e06614, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
+  - {fileID: 1250834131}
+  - {fileID: 1580692624}
+  - {fileID: 382260852}
   - {fileID: 1072444699}
   - {fileID: 639954287}
   - {fileID: 1140692337}
   - {fileID: 64179789}
   - {fileID: 1513647422}
-  - {fileID: 1000692469}
   - {fileID: 973347039}
   - {fileID: 544093877}
-  - {fileID: 382260852}
-  - {fileID: 1580692624}
-  - {fileID: 1250834131}
+  - {fileID: 1000692469}

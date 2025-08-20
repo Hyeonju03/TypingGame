@@ -728,6 +728,7 @@ GameObject:
   - component: {fileID: 559185157}
   - component: {fileID: 559185156}
   - component: {fileID: 559185155}
+  - component: {fileID: 559185158}
   m_Layer: 5
   m_Name: ToMainButton
   m_TagString: Untagged
@@ -798,19 +799,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 559185156}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls:
-      - m_Target: {fileID: 1277176713}
-        m_TargetAssemblyTypeName: SceneChange, Assembly-CSharp
-        m_MethodName: GoMain
-        m_Mode: 1
-        m_Arguments:
-          m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
-          m_IntArgument: 0
-          m_FloatArgument: 0
-          m_StringArgument: 
-          m_BoolArgument: 0
-        m_CallState: 2
+      m_Calls: []
 --- !u!114 &559185156
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -849,6 +838,18 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 559185153}
   m_CullTransparentMesh: 1
+--- !u!114 &559185158
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 559185153}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b6b9f3bf150036b4689d137b88e06614, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &594367232
 GameObject:
   m_ObjectHideFlags: 0
@@ -1354,7 +1355,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   inputField: {fileID: 1181057608}
-  transitionCanvasGroup: {fileID: 1782832164}
 --- !u!4 &791360959
 Transform:
   m_ObjectHideFlags: 0
@@ -2992,7 +2992,7 @@ SpriteRenderer:
   m_LightmapParameters: {fileID: 0}
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 0
+  m_SortingOrder: -50
   m_Sprite: {fileID: 21300000, guid: b791bec093e6a4b4eb3ec313e3d99663, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
@@ -3121,9 +3121,8 @@ MonoBehaviour:
   pointsText: {fileID: 1841048357}
   fadeCanvasGroup: {fileID: 1782832164}
   wordsToClearGame: 15
-  pointsPerClear: 150
+  pointsPerClear: 50
   fadeDuration: 0.5
-  userId: 1
   updatePointUrl: http://localhost:9001/api/users/updatePoints/{0}
   totalPoints: 0
 --- !u!114 &1277176713
