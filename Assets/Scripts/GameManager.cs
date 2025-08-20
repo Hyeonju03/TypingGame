@@ -4,7 +4,7 @@ using UnityEngine.SceneManagement;
 using System.Collections;
 using TMPro;
 using System;
-using System.Runtime.InteropServices; // WebGL용 DLL Import
+using System.Runtime.InteropServices;
 
 public class GameManager : MonoBehaviour
 {
@@ -32,6 +32,7 @@ public class GameManager : MonoBehaviour
     private int wordsTyped = 0;
     private bool gameOver = false;
 
+    // JavaScript 함수를 호출하기 위한 DLL Import
     [DllImport("__Internal")]
     private static extern void ReceivePointsFromUnity(int points);
 
@@ -61,7 +62,8 @@ public class GameManager : MonoBehaviour
         Debug.Log($"wordsTyped: {wordsTyped}");
         if (wordsTyped >= wordsToClearGame)
         {
-            totalPoints += pointsPerClear;
+            // 중복 포인트 증가를 막기 위해 이 코드는 삭제
+            // totalPoints += pointsPerClear; 
             StartCoroutine(HandleStageClear());
         }
     }
@@ -125,6 +127,9 @@ public class GameManager : MonoBehaviour
             inputManager.inputField.interactable = false;
         }
 
+        // 클리어 시점에만 포인트를 추가
+        totalPoints += pointsPerClear;
+
         string currentScene = SceneManager.GetActiveScene().name;
         string nextScene = currentScene switch
         {
@@ -144,10 +149,10 @@ public class GameManager : MonoBehaviour
             if (gameOverText != null) gameOverText.gameObject.SetActive(false);
             if (pointsText != null) pointsText.text = $"포인트: {totalPoints}";
             if (gameOverPanel != null) gameOverPanel.SetActive(true);
+            SendPointsToWeb();
         }
 
-        SendPointsToWeb();
-        yield return null; // 코루틴을 올바르게 종료하기 위해 추가
+        yield return null;
     }
 
     private IEnumerator HandleGameOver()
@@ -165,8 +170,9 @@ public class GameManager : MonoBehaviour
         if (pointsText != null) pointsText.text = $"포인트: {totalPoints}";
         if (gameOverPanel != null) gameOverPanel.SetActive(true);
 
+        // 게임오버 시에는 추가 포인트 없이 현재 totalPoints 전송
         SendPointsToWeb();
-        yield return null; // 오류 해결을 위해 추가
+        yield return null;
     }
 
     private IEnumerator FadeOut()
