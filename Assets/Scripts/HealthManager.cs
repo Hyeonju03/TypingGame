@@ -74,4 +74,11 @@ public class HealthManager : MonoBehaviour
         }
         heartRect.anchoredPosition = originalPos;
     }
+
+    // ✅ GameManager에서 호출할 체력 초기화 함수
+    public void ResetHealth()
+    {
+        currentHealth = maxHealth;
+        UpdateHeartsUI();
+    }
 }

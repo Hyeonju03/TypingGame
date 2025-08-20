@@ -1,76 +1,97 @@
-﻿using System.Collections;
+﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using TMPro;
-using System.Linq;
-using System;
+using System.Runtime.InteropServices;
 
 public class InputManager : MonoBehaviour
 {
+    public static InputManager Instance;
+ 
     [Header("Refs")]
     public TMP_InputField inputField;
-    public CanvasGroup transitionCanvasGroup;
-
-    // ✅ 사용하지 않는 변수 제거
-    // public int wordsToNextScene = 15;
-    // private int wordsRemoved = 0;
-    // public string nextSceneName;
-
     public event Action OnWordTyped;
     public Dictionary<string, List<GameObject>> wordObjectMap = new Dictionary<string, List<GameObject>>();
 
-    void Start()
+#if UNITY_WEBGL
+    [DllImport("__Internal")]
+    private static extern void FocusExternalInput();
+#endif
+    private void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(this.gameObject);
+            return;
+        }
+        Instance = this;
+        if (inputField != null)
+            inputField.readOnly = true;
+    }
+
+    private void Start()
+    {
+#if UNITY_WEBGL
+        FocusExternalInput();
+#endif
+    }
+
+    public void ReceiveInputFromWeb(string text)
     {
         if (inputField != null)
         {
-            inputField.onEndEdit.AddListener(OnSubmitInput);
+            // 텍스트를 설정하되, 불필요한 이벤트 호출을 방지합니다.
+            inputField.SetTextWithoutNotify(text);
+
+            // 캐럿 위치를 가장 끝으로 이동시켜 커서가 올바르게 보이도록 합니다.
+            inputField.caretPosition = text.Length;
         }
-        // TODO: 시작 시 페이드 인/아웃 로직
     }
 
-    public void OnSubmitInput(string input)
+    public void SubmitInputFromWeb(string input)
     {
-        if (string.IsNullOrEmpty(input))
-        {
-            return;
-        }
-
-        string matchedWord = null;
-        GameObject matchedObject = null;
-
+        if (string.IsNullOrEmpty(input)) return;
+        string normalizedInput = NormalizeInput(input);
         foreach (var pair in wordObjectMap)
         {
-            if (pair.Key.Equals(input, StringComparison.OrdinalIgnoreCase))
+            if (NormalizeInput(pair.Key).Equals(normalizedInput, StringComparison.OrdinalIgnoreCase))
             {
-                matchedWord = pair.Key;
-                matchedObject = pair.Value.FirstOrDefault(o => o != null);
-                if (matchedObject != null)
+                var obj = pair.Value.FirstOrDefault();
+
+                if (obj != null)
                 {
+                    Destroy(obj);
+                    RemoveWordAndObject(obj);
+                    OnWordTyped?.Invoke();
                     break;
                 }
             }
         }
-
-        if (matchedObject != null)
-        {
-            Destroy(matchedObject);
-            RemoveWordAndObject(matchedObject);
-
-            OnWordTyped?.Invoke();
-        }
-
         inputField.text = "";
-        inputField.ActivateInputField();
+
+#if UNITY_WEBGL
+        FocusExternalInput();
+#endif
+    }
+
+    private string NormalizeInput(string s) => string.IsNullOrEmpty(s) ? "" : s.Replace('^', ' ').Trim();
+
+    public void AddWordAndObject(string word, GameObject obj)
+    {
+        if (!wordObjectMap.ContainsKey(word)) wordObjectMap[word] = new List<GameObject>();
+        wordObjectMap[word].Add(obj);
     }
 
-    // ... 기존 메서드들 (AddWordAndObject, RemoveWordAndObject, ClearAllWords 등)
-    public void AddWordAndObject(string newWord, GameObject obj)
+    public void RemoveWordAndObject(GameObject obj)
     {
-        if (!wordObjectMap.ContainsKey(newWord))
+        if (obj == null) return;
+        string keyToRemove = wordObjectMap.FirstOrDefault(kv => kv.Value.Contains(obj)).Key;
+        if (!string.IsNullOrEmpty(keyToRemove))
         {
-            wordObjectMap[newWord] = new List<GameObject>();
+            wordObjectMap[keyToRemove].Remove(obj);
+            if (wordObjectMap[keyToRemove].Count == 0) wordObjectMap.Remove(keyToRemove);
         }
-        wordObjectMap[newWord].Add(obj);
     }
 
     public void ClearAllWords()
@@ -79,32 +100,15 @@ public class InputManager : MonoBehaviour
         {
             foreach (var obj in list)
             {
-                Destroy(obj);
+                if (obj != null) Destroy(obj);
             }
         }
         wordObjectMap.Clear();
     }
 
-    public void RemoveWordAndObject(GameObject obj)
+    public void OnLangKeyPressed(string dummy)
     {
-        if (obj == null) return;
-        string wordToRemove = null;
-        foreach (var entry in wordObjectMap)
-        {
-            if (entry.Value.Contains(obj))
-            {
-                wordToRemove = entry.Key;
-                break;
-            }
-        }
-        if (wordToRemove != null)
-        {
-            var objects = wordObjectMap[wordToRemove];
-            objects.Remove(obj);
-            if (objects.Count == 0)
-            {
-                wordObjectMap.Remove(wordToRemove);
-            }
-        }
+        Debug.Log("한영키 감지됨 (Unity)");
     }
+
 }
