@@ -3,7 +3,6 @@ using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
 using System.Collections;
 using TMPro;
-using System;
 using System.Runtime.InteropServices;
 
 public class GameManager : MonoBehaviour
@@ -15,9 +14,12 @@ public class GameManager : MonoBehaviour
     public HealthManager healthManager;
     public ReWordSpawner reWordSpawner;
     public GameObject gameOverPanel;
-    public TMP_Text gameOverText;
-    public TMP_Text gameClearText;
-    public TMP_Text pointsText;
+
+    // ▼ 타이틀을 TMP_Text → GameObject(이미지)로 교체
+    public GameObject gameOverTitle;   // GameOverPanel 하위의 Image 오브젝트
+    public GameObject gameClearTitle;  // GameOverPanel 하위의 Image 오브젝트
+
+    public TMP_Text pointsText;        // 점수 텍스트는 그대로 TMP
     public CanvasGroup fadeCanvasGroup;
 
     [Header("Point Settings")]
@@ -32,7 +34,7 @@ public class GameManager : MonoBehaviour
     private int wordsTyped = 0;
     private bool gameOver = false;
 
-    // JavaScript 함수를 호출하기 위한 DLL Import
+    // WebGL 포인트 전달
     [DllImport("__Internal")]
     private static extern void ReceivePointsFromUnity(int points);
 
@@ -59,20 +61,14 @@ public class GameManager : MonoBehaviour
     {
         if (gameOver) return;
         wordsTyped++;
-        Debug.Log($"wordsTyped: {wordsTyped}");
         if (wordsTyped >= wordsToClearGame)
-        {
-            // 중복 포인트 증가를 막기 위해 이 코드는 삭제
-            // totalPoints += pointsPerClear; 
             StartCoroutine(HandleStageClear());
-        }
     }
 
     private void OnGameOverHandler()
     {
         if (gameOver) return;
         gameOver = true;
-        Debug.Log("Game over handler called.");
         StartCoroutine(HandleGameOver());
     }
 
@@ -86,13 +82,20 @@ public class GameManager : MonoBehaviour
         if (canvas != null)
         {
             gameOverPanel = canvas.transform.Find("GameOverPanel")?.gameObject;
+
             if (gameOverPanel != null)
             {
-                gameClearText = gameOverPanel.transform.Find("GameClearText")?.GetComponent<TMP_Text>();
-                gameOverText = gameOverPanel.transform.Find("GameOverText")?.GetComponent<TMP_Text>();
+                // ▼ 이미지 타이틀 찾기 (이름은 Hierarchy와 동일하게)
+                gameClearTitle = gameOverPanel.transform.Find("GameClearTitle")?.gameObject;
+                gameOverTitle = gameOverPanel.transform.Find("GameOverTitle")?.gameObject;
+
+                // 점수 TMP 텍스트는 계속 사용
                 pointsText = gameOverPanel.transform.Find("PointsBackground/PointsText")?.GetComponent<TMP_Text>();
             }
-            fadeCanvasGroup = canvas.GetComponent<CanvasGroup>();
+
+            // (Inspector에서 이미 연결해두었다면 아래 줄은 무시됨)
+            if (fadeCanvasGroup == null)
+                fadeCanvasGroup = canvas.GetComponentInChildren<CanvasGroup>(true);
         }
 
         if (gameOverPanel != null) gameOverPanel.SetActive(false);
@@ -127,7 +130,7 @@ public class GameManager : MonoBehaviour
             inputManager.inputField.interactable = false;
         }
 
-        // 클리어 시점에만 포인트를 추가
+        // 클리어 시점에만 포인트 추가
         totalPoints += pointsPerClear;
 
         string currentScene = SceneManager.GetActiveScene().name;
@@ -145,14 +148,14 @@ public class GameManager : MonoBehaviour
         }
         else
         {
-            if (gameClearText != null) gameClearText.gameObject.SetActive(true);
-            if (gameOverText != null) gameOverText.gameObject.SetActive(false);
+            // ▼ 이미지 토글
+            if (gameClearTitle != null) gameClearTitle.SetActive(true);
+            if (gameOverTitle != null) gameOverTitle.SetActive(false);
+
             if (pointsText != null) pointsText.text = $"포인트: {totalPoints}";
             if (gameOverPanel != null) gameOverPanel.SetActive(true);
             SendPointsToWeb();
         }
-
-        yield return null;
     }
 
     private IEnumerator HandleGameOver()
@@ -165,12 +168,13 @@ public class GameManager : MonoBehaviour
             inputManager.inputField.interactable = false;
         }
 
-        if (gameClearText != null) gameClearText.gameObject.SetActive(false);
-        if (gameOverText != null) gameOverText.gameObject.SetActive(true);
+        // ▼ 이미지 토글
+        if (gameClearTitle != null) gameClearTitle.SetActive(false);
+        if (gameOverTitle != null) gameOverTitle.SetActive(true);
+
         if (pointsText != null) pointsText.text = $"포인트: {totalPoints}";
         if (gameOverPanel != null) gameOverPanel.SetActive(true);
 
-        // 게임오버 시에는 추가 포인트 없이 현재 totalPoints 전송
         SendPointsToWeb();
         yield return null;
     }
@@ -191,7 +195,6 @@ public class GameManager : MonoBehaviour
     private void SendPointsToWeb()
     {
 #if UNITY_WEBGL
-        Debug.Log("[GameManager] Sending points to WebGL page.");
         ReceivePointsFromUnity(this.totalPoints);
 #endif
     }
