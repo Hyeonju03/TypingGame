@@ -106,6 +106,9 @@ public class FallingWordMaker : MonoBehaviour
             label.enableAutoSizing = true;
             label.fontSizeMin = 12;
             label.fontSizeMax = 40;
+                    // 0821 추가
+            label.enableVertexGradient = false; // 그라디언트/버텍스 색 비활성화
+            label.color = Color.black;          // 글자색 고정: 검정
 
             var textRect = label.rectTransform;
             textRect.sizeDelta = new Vector2(laneWidth, textRect.sizeDelta.y);
@@ -140,12 +143,23 @@ public class FallingWordMaker : MonoBehaviour
 
     void ApplyOutline(TMP_Text label)
     {
+        // 공유 머티리얼 오염 방지
+        label.fontMaterial = Instantiate(label.fontMaterial);
         var mat = label.fontMaterial;
-        mat.EnableKeyword("OUTLINE_ON");
-        mat.SetFloat(ShaderUtilities.ID_OutlineWidth, outlineWidth);
-        mat.SetColor(ShaderUtilities.ID_OutlineColor, outlineColor);
-        label.fontMaterial = mat;
+
+        // ✅ 윤곽선과 언더레이 완전히 끔 → 흰색 가장자리/겹침 제거
+        mat.DisableKeyword("OUTLINE_ON");
+        mat.SetFloat(ShaderUtilities.ID_OutlineWidth, 0f);
+
+        mat.DisableKeyword("UNDERLAY_ON");
+        mat.SetFloat(ShaderUtilities.ID_UnderlayOffsetX, 0f);
+        mat.SetFloat(ShaderUtilities.ID_UnderlayOffsetY, 0f);
+        mat.SetFloat(ShaderUtilities.ID_UnderlaySoftness, 0f);
+
+        // 혹시 머티리얼 Face 색이 남아있어도 확실히 검정으로
+        mat.SetColor(ShaderUtilities.ID_FaceColor, Color.black);
     }
+
 
     IEnumerator FallDown(RectTransform rect, GameObject obj, float killY)
     {
