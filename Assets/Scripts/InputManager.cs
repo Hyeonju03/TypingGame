@@ -19,6 +19,9 @@ public class InputManager : MonoBehaviour
     [DllImport("__Internal")] private static extern void FocusExternalInput();
 #endif
 
+    // NEW: 같은 프레임 중복 제출 방지
+    private int _lastSubmitFrame = -1;
+
     private void Awake()
     {
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
@@ -34,12 +37,13 @@ public class InputManager : MonoBehaviour
         }
 
 #if UNITY_WEBGL && !UNITY_EDITOR
-        WebGLInput.captureAllKeyboardInput = false; // 브라우저가 키 수신
-        if (inputField) inputField.readOnly = true; // 보기 전용
-        InitExternalInput();                        // 숨김 input 생성/바인딩
-        FocusExternalInput();                       // 포커스
+    WebGLInput.captureAllKeyboardInput = false;
+    if (inputField) inputField.readOnly = true;
+    InitExternalInput();   // 숨은 input 생성/바인딩
+    FocusExternalInput();  // 초기 포커스
 #endif
     }
+
 
     // JS → Unity: 현재 버퍼 동기화
     public void ReceiveInputFromWeb(string text)
@@ -52,6 +56,10 @@ public class InputManager : MonoBehaviour
     // JS/Editor 공용 제출
     public void SubmitInputFromWeb(string input)
     {
+        // NEW: 같은 프레임에 두 번 이상 처리 금지
+        if (_lastSubmitFrame == Time.frameCount) return;
+        _lastSubmitFrame = Time.frameCount;
+
         if (inputField) StartCoroutine(ClearInputNextFrame());
         if (!string.IsNullOrWhiteSpace(input))
         {
@@ -60,7 +68,14 @@ public class InputManager : MonoBehaviour
             {
                 if (NormalizeInput(pair.Key).Equals(normalized, StringComparison.OrdinalIgnoreCase))
                 {
-                    var obj = pair.Value.FirstOrDefault();
+                    // CHANGED: 중복일 때 '가장 아래' 하나만 제거 (UI이면 anchoredPosition.y 기준)
+                    var obj = pair.Value
+                        .Where(o => o != null)
+                        .OrderBy(o => (o.transform is RectTransform rt)
+                                      ? rt.anchoredPosition.y
+                                      : o.transform.position.y)
+                        .FirstOrDefault();
+
                     if (obj != null)
                     {
                         RemoveWordAndObject(obj);

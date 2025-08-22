@@ -87,6 +87,26 @@ mergeInto(LibraryManager.library, {
       });
     }
 
+    // ====== 캔버스 포커스 차단 + 항상 숨은 input으로 복귀 ======
+    var canvas = document.getElementById('unity-canvas') || document.querySelector('canvas');
+    if (canvas) {
+      canvas.setAttribute('tabindex', '-1'); // 포커스 불가
+      canvas.style.outline = 'none';
+      var refocus = function(ev){
+        if (ev && ev.preventDefault) ev.preventDefault(); // 캔버스 기본 포커스 방지
+        // 전파는 막지 않아 Unity 입력 이벤트는 그대로 전달됨
+        if (el) el.focus({preventScroll:true});
+      };
+      // 캡처 단계에서 먼저 실행해 기본 포커스만 막음
+      canvas.addEventListener('pointerdown', refocus, true);
+      canvas.addEventListener('mousedown',  refocus, true);
+      canvas.addEventListener('touchstart', refocus, true);
+    }
+
+    // 실수로 blur되면 즉시 복구
+    el.addEventListener('blur', function(){ setTimeout(function(){ el && el.focus({preventScroll:true}); }, 0); });
+
+    // 초기 포커스
     el.value = '';
     el.focus({preventScroll:true});
   },
