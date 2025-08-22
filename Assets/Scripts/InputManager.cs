@@ -18,24 +18,34 @@ public class InputManager : MonoBehaviour
     [DllImport("__Internal")]
     private static extern void FocusExternalInput();
 #endif
-    private void Awake()
+    private void Awake()
     {
-        if (Instance != null && Instance != this)
-        {
-            Destroy(this.gameObject);
-            return;
-        }
+        if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
-        if (inputField != null)
-            inputField.readOnly = true;
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+    if (inputField) inputField.readOnly = true;   // WebGL: 외부 입력만
+    WebGLInput.captureAllKeyboardInput = false;   // 브라우저 입력 독점 해제
+#else
+        if (inputField) inputField.readOnly = false;  // 에디터/스탠드얼론: 직접 타이핑
+#endif
     }
+
 
     private void Start()
     {
-#if UNITY_WEBGL
-        FocusExternalInput();
+        if (inputField)
+        {
+            inputField.onSubmit.RemoveAllListeners();
+            inputField.onSubmit.AddListener(SubmitInputFromEditor); // Enter에 바로 제출
+        }
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+    FocusExternalInput();
 #endif
-    }
+    }
+    
+
 
     public void ReceiveInputFromWeb(string text)
     {
@@ -51,29 +61,70 @@ public class InputManager : MonoBehaviour
 
     public void SubmitInputFromWeb(string input)
     {
-        if (string.IsNullOrEmpty(input)) return;
+        Debug.Log($"[SubmitInputFromWeb] '{input}'");
+
+        if (inputField) StartCoroutine(ClearInputNextFrame());
+        if (string.IsNullOrWhiteSpace(input))
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        FocusExternalInput();
+#endif
+            return;
+        }
+
         string normalizedInput = NormalizeInput(input);
-        foreach (var pair in wordObjectMap)
+        foreach (var pair in wordObjectMap.ToList())
         {
             if (NormalizeInput(pair.Key).Equals(normalizedInput, StringComparison.OrdinalIgnoreCase))
             {
                 var obj = pair.Value.FirstOrDefault();
-
                 if (obj != null)
                 {
-                    Destroy(obj);
-                    RemoveWordAndObject(obj);
+                    RemoveWordAndObject(obj);              // 맵에서 먼저 제거
+                    StartCoroutine(DestroyEndOfFrame(obj)); // 프레임 끝에서 안전 파괴
                     OnWordTyped?.Invoke();
-                    break;
                 }
+                break;
             }
         }
-        inputField.text = "";
 
-#if UNITY_WEBGL
-        FocusExternalInput();
+#if UNITY_WEBGL && !UNITY_EDITOR
+    FocusExternalInput();
 #endif
-    }
+    }
+
+    private System.Collections.IEnumerator ClearInputNextFrame()
+    {
+        yield return new WaitForEndOfFrame();   // 이벤트 정리 대기
+
+        inputField.text = string.Empty;                 // 값 비우기
+        inputField.textComponent.text = string.Empty;   // 라벨도 비우기
+        inputField.textComponent.ForceMeshUpdate();
+        Canvas.ForceUpdateCanvases();
+
+#if !UNITY_WEBGL || UNITY_EDITOR
+        var es = UnityEngine.EventSystems.EventSystem.current;
+        if (es) es.SetSelectedGameObject(inputField.gameObject); // 선택 재지정
+        inputField.ActivateInputField();                         // 포커스 유지
+        inputField.caretPosition = 0;
+#else
+    FocusExternalInput(); // WebGL은 숨은 input으로 포커스
+#endif
+    }
+
+    private System.Collections.IEnumerator DestroyEndOfFrame(GameObject go)
+    {
+        if (go) go.SetActive(false);
+        yield return new WaitForEndOfFrame();
+        if (go) Destroy(go);
+    }
+
+
+
+    public void SubmitInputFromEditor(string input)
+    {
+        SubmitInputFromWeb(input); // 에디터에서도 동일 로직 재사용
+    }
 
     private string NormalizeInput(string s) => string.IsNullOrEmpty(s) ? "" : s.Replace('^', ' ').Trim();
 
@@ -111,4 +162,16 @@ public class InputManager : MonoBehaviour
         Debug.Log("한영키 감지됨 (Unity)");
     }
 
+    private void Update()
+    {
+#if !UNITY_WEBGL || UNITY_EDITOR
+        if (inputField && inputField.isFocused &&
+            (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter)))
+        {
+            SubmitInputFromEditor(inputField.text); // 동일 로직으로 처리 + 비우기 코루틴 실행
+        }
+#endif
+    }
+
 }
+

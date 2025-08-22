@@ -27,19 +27,18 @@ public class SceneChange : MonoBehaviour
 
     void Awake()
     {
-        // ✔ 오버레이 연결 상태와 무관하게 클릭 막힘 방지
-        if (loadingRoot) loadingRoot.SetActive(false);
-
-        // 나머지는 있으면 초기화
+        if (loadingRoot) loadingRoot.SetActive(false); // 클릭 막힘 방지
         if (loadingCg) loadingCg.alpha = 0f;
         if (progressBar) progressBar.value = 0f;
         if (loadingText) loadingText.text = "";
     }
 
-    // 내부 공용 로더
+    // ===== 내부 공용 로더 =====
     void Load(string sceneName)
     {
         if (busy) return;
+        if (string.IsNullOrWhiteSpace(sceneName)) return;
+
         if (resetTimeScaleOnLoad) Time.timeScale = 1f;
 
         if (!Application.CanStreamedLevelBeLoaded(sceneName))
@@ -54,10 +53,12 @@ public class SceneChange : MonoBehaviour
     {
         busy = true;
 
-        // 오버레이 안 쓰면 그냥 비동기 로드만
         if (!UseOverlay)
         {
-            yield return SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Single);
+            // 오버레이 없이도 WebGL에서 안정적 동작하도록 비동기+실시간 대기 사용
+            var opNoUi = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Single);
+            opNoUi.allowSceneActivation = true; // 바로 활성화
+            while (!opNoUi.isDone) yield return null;
             busy = false;
             yield break;
         }
@@ -69,45 +70,46 @@ public class SceneChange : MonoBehaviour
         var op = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Single);
         op.allowSceneActivation = false;
 
-        float shown = 0f;
+        float t0 = Time.realtimeSinceStartup; // 타임스케일 0 영향 배제
         while (op.progress < 0.9f)
         {
             float p = Mathf.Clamp01(op.progress / 0.9f);
             if (progressBar) progressBar.value = p;
             if (loadingText) loadingText.text = $"로딩중... {(int)(p * 100)}%";
-            shown += Time.unscaledDeltaTime;
             yield return null;
         }
 
+        // 0.9 이후 활성화 대기 구간
         if (progressBar) progressBar.value = 1f;
         if (loadingText) loadingText.text = "마무리 중...";
 
-        // 최소 노출 시간 보장 (같은 씬 전환은 안 씀)
-        while (shown < minShowTime)
-        {
-            shown += Time.unscaledDeltaTime;
+        // 최소 노출 시간 보장(실시간 기준)
+        while (Time.realtimeSinceStartup - t0 < minShowTime)
             yield return null;
-        }
 
-        // 씬 활성화(오버레이는 씬 교체와 함께 사라짐)
         op.allowSceneActivation = true;
+
+        // 씬 전환 완료까지 대기
+        while (!op.isDone) yield return null;
+
+        // 다음 씬에서 이 오브젝트가 파괴될 것이므로 여기서 busy만 해제
         busy = false;
     }
 
     static IEnumerator Fade(CanvasGroup cg, float from, float to, float dur)
     {
         cg.alpha = from;
-        float t = 0f;
-        while (t < dur)
+        float t0 = Time.realtimeSinceStartup;
+        float t;
+        while ((t = Time.realtimeSinceStartup - t0) < dur)
         {
-            t += Time.unscaledDeltaTime;
             cg.alpha = Mathf.Lerp(from, to, t / dur);
             yield return null;
         }
         cg.alpha = to;
     }
 
-    // 버튼용
+    // ===== 버튼용 메서드 =====
     public void GoMain() => Load(mainScene);
     public void GoTutorial() => Load(tutorialScene);
     public void StartStage1() => Load(stage1Scene);
@@ -122,5 +124,4 @@ public class SceneChange : MonoBehaviour
         Application.Quit();
 #endif
     }
-
 }

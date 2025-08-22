@@ -161,7 +161,7 @@ MonoBehaviour:
   outlineWidth: 0.2
   outlineColor: {r: 1, g: 0, b: 0, a: 1}
   fontSize: 36
-  fallSpeed: 50
+  fallSpeed: 105
   bottomExtra: 80
   useCustomKillLine: 1
   killLineY: -470
@@ -277,7 +277,7 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 0}
+      - m_Target: {fileID: 1781177133}
         m_TargetAssemblyTypeName: SceneChange, Assembly-CSharp
         m_MethodName: GoMain
         m_Mode: 1
@@ -1595,7 +1595,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maker: {fileID: 0}
-  spawnInterval: 3
+  spawnInterval: 0.8
   preventImmediateDup: 1
   initialSpawnCount: 0
   initialSpawnInterval: 0.15
@@ -2309,6 +2309,62 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1757108337}
   m_CullTransparentMesh: 1
+--- !u!1 &1781177132
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1781177134}
+  - component: {fileID: 1781177133}
+  m_Layer: 0
+  m_Name: SceneChange
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1781177133
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1781177132}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 62ce3e8732f87d141906ae433acdb8c1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  mainScene: Main
+  tutorialScene: Tutorial
+  stage1Scene: Stage1
+  stage2Scene: Stage2
+  stage3Scene: Stage3
+  resetTimeScaleOnLoad: 1
+  loadingRoot: {fileID: 0}
+  loadingCg: {fileID: 0}
+  progressBar: {fileID: 0}
+  loadingText: {fileID: 0}
+  minShowTime: 0.8
+  fadeInTime: 0.15
+--- !u!4 &1781177134
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1781177132}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 971.0291, y: 433.88525, z: -0.7663524}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1781476018
 GameObject:
   m_ObjectHideFlags: 0
@@ -3684,3 +3740,4 @@ SceneRoots:
   - {fileID: 973347039}
   - {fileID: 544093877}
   - {fileID: 1000692469}
+  - {fileID: 1781177134}

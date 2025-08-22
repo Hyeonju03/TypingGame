@@ -165,6 +165,9 @@ public class FallingWordMaker : MonoBehaviour
     {
         while (true)
         {
+            if (rect == null || obj == null) yield break;        // 파괴된 경우 즉시 종료
+            if (!obj.activeInHierarchy) yield break;             // 정답 처리로 비활성화된 경우 종료
+
             var p = rect.anchoredPosition;
             p.y -= fallSpeed * Time.deltaTime;
             rect.anchoredPosition = p;
@@ -173,15 +176,10 @@ public class FallingWordMaker : MonoBehaviour
             yield return null;
         }
 
-        if (healthManager != null)
-        {
-            healthManager.TakeDamage();
-        }
+        if (rect == null || obj == null || !obj.activeInHierarchy) yield break;
 
-        if (inputManager != null)
-        {
-            inputManager.RemoveWordAndObject(obj);
-        }
+        if (healthManager != null) healthManager.TakeDamage();
+        if (inputManager != null) inputManager.RemoveWordAndObject(obj);
         Destroy(obj);
     }
 }
